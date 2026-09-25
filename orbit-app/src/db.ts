@@ -14,13 +14,46 @@ export interface Mistake {
   createdAt: number;
 }
 
+export interface ScoreData {
+  physics: { plus: number; minus: number };
+  chemistry: { plus: number; minus: number };
+  mathematics: { plus: number; minus: number };
+}
+
+export interface CalendarEvent {
+  id?: number;
+  date: string; // YYYY-MM-DD
+  title: string;
+  category: 'Mock Test' | 'Coaching / Class' | 'School Holiday' | 'Revision Target' | 'General';
+  details?: string;
+  scoreData?: ScoreData;
+  createdAt: number;
+}
+
+export interface PlannerTask {
+  id?: number;
+  date: string; // YYYY-MM-DD
+  title: string;
+  subject: "Physics" | "Chemistry" | "Mathematics" | "General";
+  completed: boolean;
+  priority: number;
+  createdAt: number;
+}
+
 export class OrbitDatabase extends Dexie {
   mistakes!: Table<Mistake>;
+  calendarEvents!: Table<CalendarEvent>;
+  plannerTasks!: Table<PlannerTask>;
 
   constructor() {
     super('OrbitDB');
     this.version(1).stores({
       mistakes: '++id, subject, chapter, subtopic, errorType, nextReviewDate, reviewStage, createdAt'
+    });
+    this.version(2).stores({
+      mistakes: '++id, subject, chapter, subtopic, errorType, nextReviewDate, reviewStage, createdAt',
+      calendarEvents: '++id, date, title, category, details, scoreData, createdAt',
+      plannerTasks: '++id, date, title, subject, completed, priority, createdAt'
     });
   }
 }
