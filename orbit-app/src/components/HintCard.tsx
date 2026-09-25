@@ -61,40 +61,40 @@ export const HintCard: React.FC<HintCardProps> = ({ data, image, onReset }) => {
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
-      <div className="p-4 bg-amber-500/10 border-b border-amber-500/20">
+    <div className="bg-black border border-zinc-800 rounded-lg overflow-hidden shadow-2xl">
+      <div className="p-4 bg-zinc-950 border-b border-zinc-800">
         <div className="flex items-start gap-3">
-          <Target className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+          <Target className="w-5 h-5 text-zinc-400 shrink-0 mt-0.5" />
           <div>
-            <h3 className="font-semibold text-amber-500 mb-1">The Trap</h3>
-            <p className="text-amber-200/90 text-sm">{data.the_trap}</p>
+            <h3 className="font-semibold text-white mb-1 uppercase tracking-tight text-sm">The Trap</h3>
+            <p className="text-zinc-400 text-sm">{data.the_trap}</p>
           </div>
         </div>
       </div>
 
       <div className="p-4 space-y-4">
         {/* Hint 1 */}
-        <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
-          <div className="flex items-center gap-2 mb-2 text-blue-400">
+        <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
+          <div className="flex items-center gap-2 mb-2 text-white">
             <Lightbulb className="w-4 h-4" />
-            <h4 className="font-medium text-sm">Hint 1: The Core Lens</h4>
+            <h4 className="font-medium text-sm uppercase tracking-tight">Hint 1: The Core Lens</h4>
           </div>
-          <p className="text-slate-300 text-sm leading-relaxed">{data.hint_1_lens}</p>
+          <p className="text-zinc-400 text-sm leading-relaxed">{data.hint_1_lens}</p>
         </div>
 
         {/* Hint 2 */}
         {!unlockedHint2 ? (
           <button
             onClick={() => setUnlockedHint2(true)}
-            className="w-full py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-200 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+            className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors flex items-center justify-center gap-2 text-sm font-medium"
           >
             <Unlock className="w-4 h-4" />
             Unlock Hint 2: Setup
           </button>
         ) : (
-          <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50 fade-in">
-            <h4 className="font-medium text-sm text-indigo-400 mb-2">Hint 2: Setup</h4>
-            <p className="text-slate-300 text-sm leading-relaxed">{data.hint_2_setup}</p>
+          <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800 fade-in">
+            <h4 className="font-medium text-sm text-white mb-2 uppercase tracking-tight">Hint 2: Setup</h4>
+            <p className="text-zinc-400 text-sm leading-relaxed">{data.hint_2_setup}</p>
           </div>
         )}
 
@@ -102,16 +102,16 @@ export const HintCard: React.FC<HintCardProps> = ({ data, image, onReset }) => {
         {unlockedHint2 && !unlockedHint3 && (
           <button
             onClick={() => setUnlockedHint3(true)}
-            className="w-full py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-200 transition-colors flex items-center justify-center gap-2 text-sm font-medium fade-in"
+            className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors flex items-center justify-center gap-2 text-sm font-medium fade-in"
           >
             <Unlock className="w-4 h-4" />
             Unlock Hint 3: The Bottleneck
           </button>
         )}
         {unlockedHint3 && (
-          <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50 fade-in">
-            <h4 className="font-medium text-sm text-purple-400 mb-2">Hint 3: The Bottleneck</h4>
-            <p className="text-slate-300 text-sm leading-relaxed">{data.hint_3_pivot}</p>
+          <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800 fade-in">
+            <h4 className="font-medium text-sm text-white mb-2 uppercase tracking-tight">Hint 3: The Bottleneck</h4>
+            <p className="text-zinc-400 text-sm leading-relaxed">{data.hint_3_pivot}</p>
           </div>
         )}
 
@@ -123,27 +123,27 @@ export const HintCard: React.FC<HintCardProps> = ({ data, image, onReset }) => {
             onMouseLeave={endHold}
             onTouchStart={startHold}
             onTouchEnd={endHold}
-            className="relative w-full py-4 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 font-medium overflow-hidden select-none"
+            className="relative w-full py-4 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-300 font-medium overflow-hidden select-none"
           >
             <div
-              className="absolute inset-y-0 left-0 bg-slate-800 transition-all duration-75"
+              className="absolute inset-y-0 left-0 bg-white transition-all duration-75"
               style={{ width: `${holdProgress}%` }}
             />
-            <span className="relative z-10">Hold 2s to Reveal Solution</span>
+            <span className="relative z-10 mix-blend-difference text-white">Hold 2s to Reveal Solution</span>
           </button>
         )}
 
         {revealedSolution && (
           <div className="space-y-4 fade-in">
-            <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
-              <h4 className="font-medium text-sm text-emerald-400 mb-2">Key Formula</h4>
-              <p className="text-slate-300 text-sm font-mono bg-slate-900 p-2 rounded border border-slate-800">
+            <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
+              <h4 className="font-medium text-sm text-white mb-2 uppercase tracking-tight">Key Formula</h4>
+              <p className="text-zinc-300 text-sm font-mono bg-black p-2 rounded border border-zinc-800">
                 {data.key_formula}
               </p>
             </div>
-            <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
-              <h4 className="font-medium text-sm text-slate-200 mb-2">Full Solution</h4>
-              <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
+            <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
+              <h4 className="font-medium text-sm text-white mb-2 uppercase tracking-tight">Full Solution</h4>
+              <p className="text-zinc-400 text-sm leading-relaxed whitespace-pre-wrap">
                 {data.full_solution}
               </p>
             </div>
@@ -151,36 +151,36 @@ export const HintCard: React.FC<HintCardProps> = ({ data, image, onReset }) => {
         )}
       </div>
 
-      <div className="p-4 border-t border-slate-800 flex gap-3">
+      <div className="p-4 border-t border-zinc-800 flex gap-3">
         <button
           onClick={onReset}
-          className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+          className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
         >
           <Check className="w-4 h-4" />
-          Cracked It! 🎯
+          Cracked It
         </button>
 
         <div className="relative flex-1">
           <button
             onClick={() => setShowSaveMenu(!showSaveMenu)}
-            className="w-full py-2.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+            className="w-full py-2.5 bg-white hover:bg-zinc-200 text-black rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
           >
             <Inbox className="w-4 h-4" />
-            Add to Vault
+            Vault
             <ChevronDown className="w-4 h-4" />
           </button>
 
           {showSaveMenu && (
-            <div className="absolute bottom-full left-0 right-0 mb-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden z-10">
+            <div className="absolute bottom-full left-0 right-0 mb-2 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl overflow-hidden z-10">
               <button
                 onClick={() => { setShowSaveMenu(false); saveToVault('Concept Gap'); }}
-                className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700 transition-colors border-b border-slate-700/50"
+                className="w-full text-left px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors border-b border-zinc-800"
               >
                 Concept Gap
               </button>
               <button
                 onClick={() => { setShowSaveMenu(false); saveToVault('Silly Slip'); }}
-                className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
+                className="w-full text-left px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
               >
                 Silly Slip
               </button>

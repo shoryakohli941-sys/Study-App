@@ -62,17 +62,17 @@ export const FightMode: React.FC = () => {
     <div className="flex flex-col gap-6">
       {!image && (
         <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-          <div className="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mb-6">
-            <Camera className="w-10 h-10 text-blue-400" />
+          <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center mb-6">
+            <Camera className="w-10 h-10 text-white" />
           </div>
-          <h2 className="text-2xl font-bold text-white mb-3">Log a Tricky Problem</h2>
-          <p className="text-slate-400 mb-8 max-w-sm">
+          <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">Log a Tricky Problem</h2>
+          <p className="text-zinc-400 mb-8 max-w-sm">
             Snap a photo of a JEE problem you're stuck on. Our Socratic mentor will guide you without spoiling the answer.
           </p>
 
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 px-8 rounded-full shadow-lg shadow-blue-500/20 transition-all active:scale-95 flex items-center gap-2"
+            className="bg-white hover:bg-zinc-200 text-black font-semibold py-3 px-8 rounded-full shadow-lg transition-all active:scale-95 flex items-center gap-2"
           >
             <Camera className="w-5 h-5" />
             Capture Problem
@@ -91,24 +91,24 @@ export const FightMode: React.FC = () => {
 
       {image && !geminiData && isProcessing && (
         <div className="flex flex-col gap-6 animate-pulse">
-          <div className="relative aspect-video rounded-xl overflow-hidden bg-slate-800 border border-slate-700">
+          <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800">
             <img src={image} alt="Problem thumbnail" className="w-full h-full object-cover opacity-50 blur-sm" />
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <Loader2 className="w-10 h-10 text-blue-400 animate-spin mb-4" />
-              <p className="text-blue-300 font-medium">{tips[tipIndex]}</p>
+              <Loader2 className="w-10 h-10 text-white animate-spin mb-4" />
+              <p className="text-zinc-300 font-medium">{tips[tipIndex]}</p>
             </div>
           </div>
-          <div className="h-40 bg-slate-800/50 rounded-xl border border-slate-700/50"></div>
-          <div className="h-16 bg-slate-800/50 rounded-xl border border-slate-700/50"></div>
+          <div className="h-40 bg-zinc-900/50 rounded-xl border border-zinc-800"></div>
+          <div className="h-16 bg-zinc-900/50 rounded-xl border border-zinc-800"></div>
         </div>
       )}
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center">
-          <p className="text-red-400 mb-4">{error}</p>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-center">
+          <p className="text-zinc-300 mb-4">{error}</p>
           <button
             onClick={handleReset}
-            className="text-red-300 hover:text-red-200 text-sm font-medium underline"
+            className="text-white hover:text-zinc-300 text-sm font-medium underline"
           >
             Try again
           </button>
@@ -117,18 +117,14 @@ export const FightMode: React.FC = () => {
 
       {geminiData && image && (
         <div className="flex flex-col gap-6 fade-in">
-          <div className="relative aspect-video rounded-xl overflow-hidden bg-slate-800 border border-slate-700 shadow-xl">
+          <div className="relative aspect-video rounded-xl overflow-hidden bg-black border border-zinc-800 shadow-xl">
             <img src={image} alt="Problem thumbnail" className="w-full h-full object-contain" />
-            <div className="absolute top-2 right-2 bg-slate-900/80 backdrop-blur-sm rounded-lg px-3 py-1 text-xs font-medium border border-slate-700">
-              <span className={
-                geminiData.subject === 'Physics' ? 'text-blue-400' :
-                geminiData.subject === 'Chemistry' ? 'text-amber-400' :
-                'text-emerald-400'
-              }>
+            <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm rounded-md px-3 py-1 text-xs font-semibold border border-zinc-800 flex items-center gap-2">
+              <span className="text-white uppercase tracking-wider">
                 {geminiData.subject}
               </span>
-              <span className="text-slate-500 mx-2">•</span>
-              <span className="text-slate-300">{geminiData.chapter}</span>
+              <span className="text-zinc-600">•</span>
+              <span className="text-zinc-400">{geminiData.chapter}</span>
             </div>
           </div>
 

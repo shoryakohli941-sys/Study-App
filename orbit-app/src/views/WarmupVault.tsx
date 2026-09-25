@@ -13,18 +13,18 @@ export const WarmupVault: React.FC = () => {
   );
 
   if (dueMistakes === undefined) {
-    return <div className="flex justify-center py-20 text-slate-400">Loading vault...</div>;
+    return <div className="flex justify-center py-20 text-zinc-500">Loading vault...</div>;
   }
 
   if (dueMistakes.length === 0 || currentReviewIndex >= dueMistakes.length) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-        <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center mb-6">
-          <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+        <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center mb-6">
+          <CheckCircle2 className="w-10 h-10 text-white" />
         </div>
-        <h2 className="text-2xl font-bold text-white mb-3">All caught up!</h2>
-        <p className="text-slate-400 mb-8 max-w-sm">
-          You've completed today's warmup. Back to problem solving 🚀
+        <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">All caught up!</h2>
+        <p className="text-zinc-400 mb-8 max-w-sm">
+          You've completed today's warmup. Back to problem solving.
         </p>
       </div>
     );
@@ -60,9 +60,9 @@ export const WarmupVault: React.FC = () => {
   return (
     <div className="flex flex-col gap-6 h-full pb-8">
       <div className="flex items-center justify-between">
-        <div className="bg-blue-500/10 border border-blue-500/20 px-4 py-2 rounded-full flex items-center gap-2">
-          <Rocket className="w-4 h-4 text-blue-400" />
-          <span className="text-sm font-medium text-blue-300">
+        <div className="bg-zinc-900 border border-zinc-800 px-4 py-2 rounded-full flex items-center gap-2">
+          <Rocket className="w-4 h-4 text-white" />
+          <span className="text-xs font-semibold tracking-wider uppercase text-white">
             Today's Warmup: {dueMistakes.length - currentReviewIndex} Cards Due
           </span>
         </div>
@@ -75,57 +75,53 @@ export const WarmupVault: React.FC = () => {
       >
         {/* Front of card */}
         <div
-          className="absolute inset-0 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl overflow-hidden backface-hidden flex flex-col"
+          className="absolute inset-0 bg-black border border-zinc-800 rounded-xl shadow-2xl overflow-hidden backface-hidden flex flex-col"
           style={{ backfaceVisibility: 'hidden' }}
         >
-          <div className="relative flex-1 bg-slate-900 overflow-hidden">
+          <div className="relative flex-1 bg-black overflow-hidden border-b border-zinc-800">
             <img
               src={currentMistake.imageData}
               alt="Problem"
               className="w-full h-full object-contain p-4"
             />
-            <div className="absolute top-4 right-4 bg-slate-900/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-slate-700 text-xs font-medium text-slate-300">
+            <div className="absolute top-4 right-4 bg-black/80 backdrop-blur-sm px-3 py-1.5 rounded-md border border-zinc-800 text-[10px] font-bold uppercase tracking-wider text-zinc-300">
               Logged {daysElapsed}d ago
             </div>
           </div>
 
-          <div className="p-6 bg-slate-800">
+          <div className="p-6 bg-zinc-950">
             <div className="flex items-center gap-3 mb-2">
-              <span className={`px-2.5 py-1 rounded-md text-xs font-semibold ${
-                currentMistake.subject === 'Physics' ? 'bg-blue-500/20 text-blue-400' :
-                currentMistake.subject === 'Chemistry' ? 'bg-amber-500/20 text-amber-400' :
-                'bg-emerald-500/20 text-emerald-400'
-              }`}>
+              <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-white text-black">
                 {currentMistake.subject}
               </span>
-              <span className="text-slate-300 text-sm font-medium">{currentMistake.chapter}</span>
+              <span className="text-white text-sm font-medium tracking-tight">{currentMistake.chapter}</span>
             </div>
-            <p className="text-slate-400 text-xs">Tap to reveal the trap and key formula</p>
+            <p className="text-zinc-500 text-xs">Tap to reveal the trap and key formula</p>
           </div>
         </div>
 
         {/* Back of card */}
         <div
-          className="absolute inset-0 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl overflow-hidden flex flex-col p-6 [transform:rotateY(180deg)]"
+          className="absolute inset-0 bg-black border border-zinc-800 rounded-xl shadow-2xl overflow-hidden flex flex-col p-6 [transform:rotateY(180deg)]"
           style={{ backfaceVisibility: 'hidden' }}
         >
           <div className="flex-1 space-y-6">
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <Target className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <Target className="w-5 h-5 text-white shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-semibold text-amber-500 mb-1">The Trap</h3>
-                  <p className="text-amber-200/90 text-sm">{currentMistake.theTrap}</p>
+                  <h3 className="font-semibold text-white mb-1 uppercase tracking-tight text-sm">The Trap</h3>
+                  <p className="text-zinc-300 text-sm leading-relaxed">{currentMistake.theTrap}</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-slate-900/50 border border-slate-700/50 rounded-xl p-4">
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <Sigma className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                <Sigma className="w-5 h-5 text-white shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-semibold text-emerald-400 mb-2">Key Formula / Setup</h3>
-                  <p className="text-slate-300 text-sm font-mono bg-slate-900 p-3 rounded-lg border border-slate-800">
+                  <h3 className="font-semibold text-white mb-2 uppercase tracking-tight text-sm">Key Formula / Setup</h3>
+                  <p className="text-zinc-300 text-sm font-mono bg-black p-3 rounded-md border border-zinc-800">
                     {currentMistake.keyFormula}
                   </p>
                 </div>
@@ -133,19 +129,19 @@ export const WarmupVault: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-6 border-t border-slate-700 flex gap-4 mt-auto">
+          <div className="pt-6 border-t border-zinc-800 flex gap-4 mt-auto">
             <button
               onClick={(e) => { e.stopPropagation(); handleReview('tough'); }}
-              className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+              className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 border border-zinc-800"
             >
-              <RotateCcw className="w-5 h-5" />
+              <RotateCcw className="w-4 h-4" />
               Still Tough
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); handleReview('mastered'); }}
-              className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+              className="flex-1 py-3 bg-white hover:bg-zinc-200 text-black rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
             >
-              <Rocket className="w-5 h-5" />
+              <Rocket className="w-4 h-4" />
               Mastered
             </button>
           </div>

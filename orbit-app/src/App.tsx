@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Layout } from './components/Layout';
+import { Layout, type TabType } from './components/Layout';
 import { FightMode } from './views/FightMode';
 import { WarmupVault } from './views/WarmupVault';
+import { Calendar } from './views/Calendar';
+import { Planner } from './views/Planner';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { getGeminiApiKey } from './lib/gemini';
 import './App.css';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'fight' | 'vault'>('fight');
+  const [activeTab, setActiveTab] = useState<TabType>('fight');
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
@@ -23,11 +25,10 @@ function App() {
         onTabChange={setActiveTab}
         onSettingsClick={() => setShowSettings(true)}
       >
-        {activeTab === 'fight' ? (
-          <FightMode />
-        ) : (
-          <WarmupVault />
-        )}
+        {activeTab === 'fight' && <FightMode />}
+        {activeTab === 'vault' && <WarmupVault />}
+        {activeTab === 'calendar' && <Calendar />}
+        {activeTab === 'planner' && <Planner />}
       </Layout>
 
       {showSettings && (
