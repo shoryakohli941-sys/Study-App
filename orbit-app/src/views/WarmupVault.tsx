@@ -4,7 +4,7 @@ import { db } from '../db';
 import { Target, Sigma, RotateCcw, Rocket, CheckCircle2 } from 'lucide-react';
 
 export const WarmupVault: React.FC = () => {
-  const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
+  const currentReviewIndex = 0; // We always show the first due mistake because the array shifts automatically
   const [isFlipped, setIsFlipped] = useState(false);
 
   const dueMistakes = useLiveQuery(
