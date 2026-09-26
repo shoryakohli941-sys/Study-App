@@ -7,80 +7,87 @@ import {
   Film, 
   CheckCircle2, 
   Circle, 
-  PlayCircle,
-  Link as LinkIcon
+  PlayCircle 
 } from 'lucide-react';
 import { BACKLOG_CHAPTERS, PLAYLIST_LINKS, Chapter } from '../data/manzilPlaylists';
 import { db } from '../db';
 
 type SubjectFilter = 'All' | 'Physics' | 'Mathematics' | 'Physical Chemistry' | 'Organic Chemistry' | 'Inorganic Chemistry';
 
-// Bulletproof YouTube Thumbnail Component
-const YouTubeThumbnail: React.FC<{ 
-  videoId?: string; 
-  title: string; 
+interface ThumbnailCardProps {
+  videoId?: string;
+  chapter: string;
   subject: string;
   duration: string;
-}> = ({ videoId, title, subject, duration }) => {
-  const [hasError, setHasError] = useState(false);
+}
 
-  // If no 11-char ID exists or loading failed, display architectural monochrome card
-  if (!videoId || videoId.length !== 11 || hasError) {
+const ThumbnailCard: React.FC<ThumbnailCardProps> = ({ videoId, chapter, subject, duration }) => {
+  const [imgFailed, setImgFailed] = useState(false);
+
+  // If a valid 11-character videoId exists and hasn't errored out, try loading the thumbnail
+  if (videoId && videoId.length === 11 && !imgFailed) {
     return (
-      <div className="w-full h-full bg-zinc-950 border border-zinc-800 flex flex-col items-center justify-center p-2 text-center select-none group-hover:border-zinc-600 transition-colors">
-        <PlayCircle className="w-6 h-6 text-zinc-600 group-hover:text-white transition-colors mb-1" />
-        <span className="text-[9px] font-mono font-bold text-zinc-400 uppercase tracking-wider">
-          PW MANZIL
-        </span>
-        <span className="text-[8px] font-mono text-zinc-600 mt-0.5">
-          {duration}
-        </span>
+      <div className="relative w-28 h-20 shrink-0 rounded bg-zinc-900 overflow-hidden border border-zinc-800">
+        <img
+          src={`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`}
+          alt={chapter}
+          referrerPolicy="no-referrer"
+          className="w-full h-full object-cover"
+          loading="lazy"
+          onError={() => setImgFailed(true)}
+        />
+        <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+          <PlayCircle className="w-5 h-5 text-white/90 drop-shadow" />
+        </div>
       </div>
     );
   }
 
+  // Guaranteed fallback card: Crisp monochrome visual block (no external network needed)
+  const getSubjectCode = (sub: string) => {
+    if (sub === 'Physics') return 'PHY';
+    if (sub === 'Mathematics') return 'MTH';
+    if (sub.includes('Organic')) return 'OC';
+    if (sub.includes('Inorganic')) return 'IOC';
+    return 'PC';
+  };
+
   return (
-    <img
-      src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
-      alt={title}
-      referrerPolicy="no-referrer"
-      crossOrigin="anonymous"
-      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-      loading="lazy"
-      onError={() => setHasError(true)}
-    />
+    <div className="relative w-28 h-20 shrink-0 rounded bg-gradient-to-br from-zinc-900 to-black border border-zinc-800 flex flex-col justify-between p-2 select-none">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-mono font-bold tracking-wider text-zinc-400">
+          {getSubjectCode(subject)}
+        </span>
+        <PlayCircle className="w-4 h-4 text-zinc-600" />
+      </div>
+      <div>
+        <div className="text-[10px] font-bold text-zinc-200 line-clamp-1 leading-tight">
+          {chapter}
+        </div>
+        <div className="text-[9px] font-mono text-zinc-500 mt-0.5">
+          {duration}
+        </div>
+      </div>
+    </div>
   );
 };
 
 export const BacklogHub: React.FC = () => {
   const [filter, setFilter] = useState<SubjectFilter>('All');
   const [classFilter, setClassFilter] = useState<'All' | 11 | 12>('All');
-  
-  // Custom user video IDs attached locally
-  const [customVideoIds, setCustomVideoIds] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem('orbit_custom_video_ids');
-    return saved ? JSON.parse(saved) : {};
-  });
-
-  // Track completed backlogs
   const [completedIds, setCompletedIds] = useState<Set<string>>(() => {
-    const saved = localStorage.getItem('orbit_completed_backlog');
-    return saved ? new Set(JSON.parse(saved)) : new Set();
+    try {
+      const saved = localStorage.getItem('orbit_completed_backlog');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
   });
-
   const [addedGoals, setAddedGoals] = useState<Set<string>>(new Set());
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [inputUrl, setInputUrl] = useState('');
 
-  // Persist completed chapters
   useEffect(() => {
     localStorage.setItem('orbit_completed_backlog', JSON.stringify(Array.from(completedIds)));
   }, [completedIds]);
-
-  // Persist custom user video mappings
-  useEffect(() => {
-    localStorage.setItem('orbit_custom_video_ids', JSON.stringify(customVideoIds));
-  }, [customVideoIds]);
 
   const toggleComplete = (id: string) => {
     setCompletedIds((prev) => {
@@ -91,18 +98,6 @@ export const BacklogHub: React.FC = () => {
     });
   };
 
-  const handleSaveCustomUrl = (chapterId: string) => {
-    const match = inputUrl.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
-    if (match && match[1]) {
-      setCustomVideoIds(prev => ({ ...prev, [chapterId]: match[1] }));
-    } else if (inputUrl.trim().length === 11) {
-      setCustomVideoIds(prev => ({ ...prev, [chapterId]: inputUrl.trim() }));
-    }
-    setEditingId(null);
-    setInputUrl('');
-  };
-
-  // Directly injects the lecture into Dexie plannerTasks
   const handleAddToDailyGoals = async (ch: Chapter) => {
     try {
       const today = new Date().toISOString().split('T')[0];
@@ -125,9 +120,9 @@ export const BacklogHub: React.FC = () => {
           next.delete(ch.id);
           return next;
         });
-      }, 2500);
+      }, 2000);
     } catch (err) {
-      console.error("Failed to add task to planner:", err);
+      console.error("Failed to add task:", err);
     }
   };
 
@@ -137,7 +132,7 @@ export const BacklogHub: React.FC = () => {
     return matchSub && matchClass;
   });
 
-  const completionPct = Math.round((completedIds.size / BACKLOG_CHAPTERS.length) * 100);
+  const completionPct = Math.round((completedIds.size / (BACKLOG_CHAPTERS.length || 1)) * 100);
 
   return (
     <div className="min-h-screen bg-black text-white pb-28 pt-4 px-4 max-w-xl mx-auto space-y-5">
@@ -159,7 +154,6 @@ export const BacklogHub: React.FC = () => {
           </div>
         </div>
 
-        {/* Minimalist Progress Track */}
         <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
           <div 
             className="h-full bg-white transition-all duration-500 ease-out" 
@@ -168,7 +162,7 @@ export const BacklogHub: React.FC = () => {
         </div>
       </div>
 
-      {/* Class Filters */}
+      {/* Class Level Filters */}
       <div className="flex gap-2 font-mono text-xs">
         {(['All', 11, 12] as const).map((lvl) => (
           <button
@@ -223,10 +217,8 @@ export const BacklogHub: React.FC = () => {
         {filtered.map((item) => {
           const isDone = completedIds.has(item.id);
           const isAdded = addedGoals.has(item.id);
-          const activeVideoId = customVideoIds[item.id] || item.videoId;
-          
-          const targetUrl = activeVideoId
-            ? `https://www.youtube.com/watch?v=${activeVideoId}`
+          const targetUrl = item.videoId
+            ? `https://www.youtube.com/watch?v=${item.videoId}`
             : `https://www.youtube.com/results?search_query=PW+Manzil+JEE+${encodeURIComponent(item.chapter)}`;
 
           return (
@@ -258,18 +250,15 @@ export const BacklogHub: React.FC = () => {
                   href={targetUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="relative w-28 h-20 shrink-0 rounded-md overflow-hidden border border-zinc-800 bg-zinc-900 group"
                   title={`Watch ${item.chapter}`}
+                  className="block shrink-0"
                 >
-                  <YouTubeThumbnail 
-                    videoId={activeVideoId} 
-                    title={item.chapter} 
-                    subject={item.subject} 
+                  <ThumbnailCard
+                    videoId={item.videoId}
+                    chapter={item.chapter}
+                    subject={item.subject}
                     duration={item.duration}
                   />
-                  <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors flex items-center justify-center">
-                    <PlayCircle className="w-6 h-6 text-white/80 group-hover:text-white drop-shadow transition-transform group-hover:scale-110" />
-                  </div>
                 </a>
 
                 {/* Chapter Info */}
@@ -292,7 +281,7 @@ export const BacklogHub: React.FC = () => {
                     {item.chapter}
                   </h3>
 
-                  {/* Duration Line Directly Below Title */}
+                  {/* Duration Line */}
                   <div className="flex items-center gap-1.5 mt-1.5 text-[11px] font-mono text-zinc-400">
                     <Clock className="w-3.5 h-3.5 text-zinc-500" />
                     <span>~{item.duration} One-Shot</span>
@@ -300,59 +289,17 @@ export const BacklogHub: React.FC = () => {
                 </div>
               </div>
 
-              {/* URL Customizer Accordion */}
-              {editingId === item.id ? (
-                <div className="flex items-center gap-2 pt-2 border-t border-zinc-900 font-mono text-xs">
-                  <input
-                    type="text"
-                    placeholder="Paste YouTube link or Video ID"
-                    value={inputUrl}
-                    onChange={(e) => setInputUrl(e.target.value)}
-                    className="flex-1 px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded text-xs text-white focus:outline-none focus:border-zinc-500"
-                    autoFocus
-                  />
-                  <button
-                    onClick={() => handleSaveCustomUrl(item.id)}
-                    className="px-2.5 py-1 bg-white text-black font-semibold rounded text-[11px]"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={() => setEditingId(null)}
-                    className="px-2 py-1 text-zinc-400 hover:text-white text-[11px]"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : null}
-
               {/* Action Buttons */}
               <div className="flex items-center justify-between pt-2 border-t border-zinc-900/80 font-mono text-xs">
-                <div className="flex items-center gap-3">
-                  <a
-                    href={targetUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-zinc-400 hover:text-white transition-colors"
-                  >
-                    Watch <ExternalLink className="w-3 h-3 ml-0.5" />
-                  </a>
+                <a
+                  href={targetUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-zinc-400 hover:text-white transition-colors"
+                >
+                  Watch <ExternalLink className="w-3 h-3 ml-0.5" />
+                </a>
 
-                  {/* Quick-attach YouTube link if you ever want to link a specific video */}
-                  <button
-                    onClick={() => {
-                      setEditingId(item.id);
-                      setInputUrl(activeVideoId ? `https://youtube.com/watch?v=${activeVideoId}` : '');
-                    }}
-                    className="inline-flex items-center gap-1 text-zinc-600 hover:text-zinc-300 transition-colors text-[11px]"
-                    title="Set Custom YouTube Link"
-                  >
-                    <LinkIcon className="w-3 h-3" />
-                    {activeVideoId ? "Edit link" : "Set link"}
-                  </button>
-                </div>
-
-                {/* Direct Inject into Dexie Goals */}
                 <button
                   onClick={() => handleAddToDailyGoals(item)}
                   className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] transition-all border ${
