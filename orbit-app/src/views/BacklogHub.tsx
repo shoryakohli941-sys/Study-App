@@ -7,27 +7,34 @@ import {
   Film, 
   CheckCircle2, 
   Circle, 
-  PlayCircle 
+  PlayCircle,
+  Link as LinkIcon
 } from 'lucide-react';
 import { BACKLOG_CHAPTERS, PLAYLIST_LINKS, Chapter } from '../data/manzilPlaylists';
 import { db } from '../db';
 
 type SubjectFilter = 'All' | 'Physics' | 'Mathematics' | 'Physical Chemistry' | 'Organic Chemistry' | 'Inorganic Chemistry';
 
-type BacklogItem = Chapter & {
-  videoId?: string;
-  title?: string;
-};
-
-// Robust YouTube Thumbnail component with no-referrer & wireframe fallback
-const YouTubeThumbnail: React.FC<{ videoId?: string; title: string }> = ({ videoId, title }) => {
+// Bulletproof YouTube Thumbnail Component
+const YouTubeThumbnail: React.FC<{ 
+  videoId?: string; 
+  title: string; 
+  subject: string;
+  duration: string;
+}> = ({ videoId, title, subject, duration }) => {
   const [hasError, setHasError] = useState(false);
 
+  // If no 11-char ID exists or loading failed, display architectural monochrome card
   if (!videoId || videoId.length !== 11 || hasError) {
     return (
-      <div className="w-full h-full bg-zinc-900 border border-zinc-800 flex flex-col items-center justify-center p-2 text-center select-none">
-        <PlayCircle className="w-5 h-5 text-zinc-600 mb-1 group-hover:text-zinc-300 transition-colors" />
-        <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-tighter">ONE-SHOT</span>
+      <div className="w-full h-full bg-zinc-950 border border-zinc-800 flex flex-col items-center justify-center p-2 text-center select-none group-hover:border-zinc-600 transition-colors">
+        <PlayCircle className="w-6 h-6 text-zinc-600 group-hover:text-white transition-colors mb-1" />
+        <span className="text-[9px] font-mono font-bold text-zinc-400 uppercase tracking-wider">
+          PW MANZIL
+        </span>
+        <span className="text-[8px] font-mono text-zinc-600 mt-0.5">
+          {duration}
+        </span>
       </div>
     );
   }
@@ -48,15 +55,32 @@ const YouTubeThumbnail: React.FC<{ videoId?: string; title: string }> = ({ video
 export const BacklogHub: React.FC = () => {
   const [filter, setFilter] = useState<SubjectFilter>('All');
   const [classFilter, setClassFilter] = useState<'All' | 11 | 12>('All');
+  
+  // Custom user video IDs attached locally
+  const [customVideoIds, setCustomVideoIds] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem('orbit_custom_video_ids');
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  // Track completed backlogs
   const [completedIds, setCompletedIds] = useState<Set<string>>(() => {
     const saved = localStorage.getItem('orbit_completed_backlog');
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
-  const [addedGoals, setAddedGoals] = useState<Set<string>>(new Set());
 
+  const [addedGoals, setAddedGoals] = useState<Set<string>>(new Set());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [inputUrl, setInputUrl] = useState('');
+
+  // Persist completed chapters
   useEffect(() => {
     localStorage.setItem('orbit_completed_backlog', JSON.stringify(Array.from(completedIds)));
   }, [completedIds]);
+
+  // Persist custom user video mappings
+  useEffect(() => {
+    localStorage.setItem('orbit_custom_video_ids', JSON.stringify(customVideoIds));
+  }, [customVideoIds]);
 
   const toggleComplete = (id: string) => {
     setCompletedIds((prev) => {
@@ -67,13 +91,28 @@ export const BacklogHub: React.FC = () => {
     });
   };
 
+  const handleSaveCustomUrl = (chapterId: string) => {
+    const match = inputUrl.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
+    if (match && match[1]) {
+      setCustomVideoIds(prev => ({ ...prev, [chapterId]: match[1] }));
+    } else if (inputUrl.trim().length === 11) {
+      setCustomVideoIds(prev => ({ ...prev, [chapterId]: inputUrl.trim() }));
+    }
+    setEditingId(null);
+    setInputUrl('');
+  };
+
+  // Directly injects the lecture into Dexie plannerTasks
   const handleAddToDailyGoals = async (ch: Chapter) => {
     try {
       const today = new Date().toISOString().split('T')[0];
+      const subjectGroup: 'Physics' | 'Chemistry' | 'Mathematics' = 
+        ch.subject.includes('Chemistry') ? 'Chemistry' : (ch.subject as 'Physics' | 'Mathematics');
+
       await db.plannerTasks.add({
         date: today,
         title: `Manzil: ${ch.chapter}`,
-        subject: ch.subject.includes('Chemistry') ? 'Chemistry' : (ch.subject as 'Physics' | 'Chemistry' | 'Mathematics'),
+        subject: subjectGroup,
         completed: false,
         priority: ch.weightage === 'High' ? 'high' : 'medium',
         createdAt: Date.now()
@@ -86,19 +125,19 @@ export const BacklogHub: React.FC = () => {
           next.delete(ch.id);
           return next;
         });
-      }, 2000);
+      }, 2500);
     } catch (err) {
-      console.error("Failed to add task:", err);
+      console.error("Failed to add task to planner:", err);
     }
   };
 
-  const filtered = (BACKLOG_CHAPTERS as BacklogItem[]).filter((item) => {
+  const filtered = BACKLOG_CHAPTERS.filter((item) => {
     const matchSub = filter === 'All' || item.subject === filter;
     const matchClass = classFilter === 'All' || item.classLevel === classFilter;
     return matchSub && matchClass;
   });
 
-  const completionPct = Math.round((completedIds.size / (BACKLOG_CHAPTERS.length || 1)) * 100);
+  const completionPct = Math.round((completedIds.size / BACKLOG_CHAPTERS.length) * 100);
 
   return (
     <div className="min-h-screen bg-black text-white pb-28 pt-4 px-4 max-w-xl mx-auto space-y-5">
@@ -111,7 +150,7 @@ export const BacklogHub: React.FC = () => {
               Backlog Mission Control
             </h1>
             <p className="text-[11px] text-zinc-500">
-              JEE Class 11 & 12 • Manzil Syllabus Archive
+              {BACKLOG_CHAPTERS.length} Chapters • Manzil JEE Complete Archive
             </p>
           </div>
           <div className="text-right">
@@ -129,7 +168,7 @@ export const BacklogHub: React.FC = () => {
         </div>
       </div>
 
-      {/* Class Level Filters */}
+      {/* Class Filters */}
       <div className="flex gap-2 font-mono text-xs">
         {(['All', 11, 12] as const).map((lvl) => (
           <button
@@ -184,8 +223,10 @@ export const BacklogHub: React.FC = () => {
         {filtered.map((item) => {
           const isDone = completedIds.has(item.id);
           const isAdded = addedGoals.has(item.id);
-          const targetUrl = item.videoId
-            ? `https://www.youtube.com/watch?v=${item.videoId}`
+          const activeVideoId = customVideoIds[item.id] || item.videoId;
+          
+          const targetUrl = activeVideoId
+            ? `https://www.youtube.com/watch?v=${activeVideoId}`
             : `https://www.youtube.com/results?search_query=PW+Manzil+JEE+${encodeURIComponent(item.chapter)}`;
 
           return (
@@ -199,7 +240,7 @@ export const BacklogHub: React.FC = () => {
             >
               <div className="flex items-start gap-3">
                 
-                {/* Checkbox */}
+                {/* Complete Checkbox */}
                 <button
                   onClick={() => toggleComplete(item.id)}
                   className="mt-1 text-zinc-500 hover:text-white transition-colors shrink-0"
@@ -217,12 +258,17 @@ export const BacklogHub: React.FC = () => {
                   href={targetUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="relative w-24 h-16 sm:w-28 sm:h-20 shrink-0 rounded-md overflow-hidden border border-zinc-800 bg-zinc-900 group"
+                  className="relative w-28 h-20 shrink-0 rounded-md overflow-hidden border border-zinc-800 bg-zinc-900 group"
                   title={`Watch ${item.chapter}`}
                 >
-                  <YouTubeThumbnail videoId={item.videoId} title={item.chapter} />
-                  <div className="absolute inset-0 bg-black/25 group-hover:bg-transparent transition-colors flex items-center justify-center">
-                    <PlayCircle className="w-5 h-5 text-white/80 group-hover:text-white drop-shadow transition-transform group-hover:scale-110" />
+                  <YouTubeThumbnail 
+                    videoId={activeVideoId} 
+                    title={item.chapter} 
+                    subject={item.subject} 
+                    duration={item.duration}
+                  />
+                  <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors flex items-center justify-center">
+                    <PlayCircle className="w-6 h-6 text-white/80 group-hover:text-white drop-shadow transition-transform group-hover:scale-110" />
                   </div>
                 </a>
 
@@ -247,23 +293,64 @@ export const BacklogHub: React.FC = () => {
                   </h3>
 
                   {/* Duration Line Directly Below Title */}
-                  <div className="flex items-center gap-1 mt-1.5 text-[11px] font-mono text-zinc-500">
-                    <Clock className="w-3 h-3 text-zinc-400" />
-                    <span>~{item.estDuration} One-Shot</span>
+                  <div className="flex items-center gap-1.5 mt-1.5 text-[11px] font-mono text-zinc-400">
+                    <Clock className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>~{item.duration} One-Shot</span>
                   </div>
                 </div>
               </div>
 
+              {/* URL Customizer Accordion */}
+              {editingId === item.id ? (
+                <div className="flex items-center gap-2 pt-2 border-t border-zinc-900 font-mono text-xs">
+                  <input
+                    type="text"
+                    placeholder="Paste YouTube link or Video ID"
+                    value={inputUrl}
+                    onChange={(e) => setInputUrl(e.target.value)}
+                    className="flex-1 px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded text-xs text-white focus:outline-none focus:border-zinc-500"
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => handleSaveCustomUrl(item.id)}
+                    className="px-2.5 py-1 bg-white text-black font-semibold rounded text-[11px]"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setEditingId(null)}
+                    className="px-2 py-1 text-zinc-400 hover:text-white text-[11px]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
+
               {/* Action Buttons */}
               <div className="flex items-center justify-between pt-2 border-t border-zinc-900/80 font-mono text-xs">
-                <a
-                  href={targetUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-zinc-400 hover:text-white transition-colors"
-                >
-                  Watch Lecture <ExternalLink className="w-3 h-3 ml-0.5" />
-                </a>
+                <div className="flex items-center gap-3">
+                  <a
+                    href={targetUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-zinc-400 hover:text-white transition-colors"
+                  >
+                    Watch <ExternalLink className="w-3 h-3 ml-0.5" />
+                  </a>
+
+                  {/* Quick-attach YouTube link if you ever want to link a specific video */}
+                  <button
+                    onClick={() => {
+                      setEditingId(item.id);
+                      setInputUrl(activeVideoId ? `https://youtube.com/watch?v=${activeVideoId}` : '');
+                    }}
+                    className="inline-flex items-center gap-1 text-zinc-600 hover:text-zinc-300 transition-colors text-[11px]"
+                    title="Set Custom YouTube Link"
+                  >
+                    <LinkIcon className="w-3 h-3" />
+                    {activeVideoId ? "Edit link" : "Set link"}
+                  </button>
+                </div>
 
                 {/* Direct Inject into Dexie Goals */}
                 <button
