@@ -24,7 +24,10 @@ export interface CalendarEvent {
   id?: number;
   date: string; // YYYY-MM-DD
   title: string;
-  category: 'Mock Test' | 'Coaching / Class' | 'School Holiday' | 'Revision Target' | 'General';
+  category: 'Mock Test' | 'Study Block / Revision' | 'Coaching Class' | 'School / Holiday' | 'Goal / Milestone' | 'General';
+  isAllDay: boolean;
+  startTime?: string;
+  endTime?: string;
   details?: string;
   scoreData?: ScoreData;
   createdAt: number;
@@ -54,6 +57,20 @@ export class OrbitDatabase extends Dexie {
       mistakes: '++id, subject, chapter, subtopic, errorType, nextReviewDate, reviewStage, createdAt',
       calendarEvents: '++id, date, title, category, details, scoreData, createdAt',
       plannerTasks: '++id, date, title, subject, completed, priority, createdAt'
+    });
+    this.version(3).stores({
+      mistakes: '++id, subject, chapter, subtopic, errorType, nextReviewDate, reviewStage, createdAt',
+      calendarEvents: '++id, date, title, category, isAllDay, startTime, endTime, details, scoreData, createdAt',
+      plannerTasks: '++id, date, title, subject, completed, priority, createdAt'
+    }).upgrade(tx => {
+      return tx.table("calendarEvents").toCollection().modify(event => {
+        if (event.isAllDay === undefined) {
+          event.isAllDay = true;
+        }
+        if (event.category === 'Coaching / Class') event.category = 'Coaching Class';
+        if (event.category === 'School Holiday') event.category = 'School / Holiday';
+        if (event.category === 'Revision Target') event.category = 'Study Block / Revision';
+      });
     });
   }
 }
