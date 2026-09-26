@@ -1,118 +1,128 @@
 import React, { useState, useEffect } from 'react';
-import { Key, X } from 'lucide-react';
-import { getGeminiApiKey } from '../lib/gemini';
+import { Key, CheckCircle2, X } from 'lucide-react';
+import { getApiKey, setApiKey } from '../lib/gemini';
 
 interface ApiKeyModalProps {
+  isOpen: boolean;
   onClose: () => void;
 }
 
-export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ onClose }) => {
-  const [apiKey, setApiKey] = useState('');
-  const [examName, setExamName] = useState('JEE Main');
-  const [examDate, setExamDate] = useState('2027-01-24');
+export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose }) => {
+  const [keyInput, setKeyInput] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const existingKey = localStorage.getItem('gemini_api_key') || '';
-    setApiKey(existingKey);
-    // Note: We use indexedDB for userSettings now, so we fetch it via dexie ideally,
-    // but for simplicity in this modal we can leave it decoupled or update via db here.
-    import('../db').then(({ db }) => {
-      db.userSettings.toArray().then(settings => {
-        if (settings.length > 0) {
-          setExamName(settings[0].targetExamName);
-          setExamDate(settings[0].targetExamDate);
-        }
-      });
-    });
-  }, []);
+    if (isOpen) {
+      setKeyInput(getApiKey());
+      setError('');
+    }
+  }, [isOpen]);
 
-  const hasKey = !!getGeminiApiKey();
+  if (!isOpen) return null;
 
-  const handleSave = async () => {
-    if (!apiKey.trim()) {
-      alert("Please enter a valid API Key.");
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = keyInput.trim();
+    if (!clean) {
+      setError('Please enter a valid Gemini API key.');
       return;
     }
-    localStorage.setItem('gemini_api_key', apiKey.trim());
-    const { db } = await import('../db');
-    const settings = await db.userSettings.toArray();
-    if (settings.length > 0) {
-      await db.userSettings.update(settings[0].id!, { targetExamName: examName, targetExamDate: examDate });
-    } else {
-      await db.userSettings.add({ targetExamName: examName, targetExamDate: examDate, geminiApiKey: apiKey.trim() });
-    }
+    setApiKey(clean);
+    setError('');
     onClose();
   };
 
+  const hasSavedKey = Boolean(getApiKey());
+
   return (
-    <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-zinc-950 border border-zinc-800 rounded-lg w-full max-w-sm overflow-hidden shadow-2xl relative">
-        {hasKey && (
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-1 text-zinc-400 hover:text-white transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        )}
-        <div className="p-6">
-          <div className="w-12 h-12 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center mb-4">
-            <Key className="w-6 h-6 text-white" />
-          </div>
-          <h2 className="text-xl font-bold text-white mb-2 tracking-tight">Orbit Settings</h2>
-          <p className="text-zinc-400 text-sm mb-6">
-            Configure your AI mentor and target exam countdown.
-          </p>
-
-          <div className="space-y-4">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm"
+      onClick={() => {
+        // Only allow clicking outside to dismiss IF a key already exists
+        if (hasSavedKey) onClose();
+      }}
+    >
+      <div 
+        className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-xl p-6 shadow-2xl space-y-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-zinc-900 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg">
+              <Key className="w-4 h-4 text-white" />
+            </div>
             <div>
-              <label htmlFor="apiKey" className="block text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">
+              <h3 className="text-sm font-semibold text-white tracking-tight">
                 Gemini API Key
-              </label>
-              <input
-                id="apiKey"
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="AIzaSy..."
-                className="w-full bg-black border border-zinc-800 rounded-md px-4 py-2.5 text-white placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-white focus:border-white transition-all"
-              />
+              </h3>
+              <p className="text-[11px] text-zinc-400 font-mono">
+                Saved locally on this device
+              </p>
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">
-                  Target Exam
-                </label>
-                <input
-                  type="text"
-                  value={examName}
-                  onChange={(e) => setExamName(e.target.value)}
-                  placeholder="e.g. JEE Main"
-                  className="w-full bg-black border border-zinc-800 rounded-md px-3 py-2.5 text-white focus:outline-none focus:border-white transition-all text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wider">
-                  Date
-                </label>
-                <input
-                  type="date"
-                  value={examDate}
-                  onChange={(e) => setExamDate(e.target.value)}
-                  className="w-full bg-black border border-zinc-800 rounded-md px-3 py-2.5 text-white focus:outline-none focus:border-white transition-all text-sm"
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={handleSave}
-              className="w-full bg-white hover:bg-zinc-200 text-black font-bold uppercase tracking-widest py-3 rounded-md transition-colors mt-2"
+          </div>
+          {hasSavedKey && (
+            <button 
+              onClick={onClose}
+              className="text-zinc-500 hover:text-white transition-colors"
+              type="button"
             >
-              Save Settings
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        <form onSubmit={handleSave} className="space-y-4 font-mono">
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-zinc-400 mb-1.5">
+              Google AI Studio Key
+            </label>
+            <input
+              type="password"
+              value={keyInput}
+              onChange={(e) => {
+                setKeyInput(e.target.value);
+                if (error) setError('');
+              }}
+              placeholder="AIzaSy..."
+              className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors"
+              autoFocus
+            />
+            {error && (
+              <p className="text-[11px] text-red-400 mt-1.5 font-sans">{error}</p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-zinc-500 font-sans">
+            <span>Stored in device localStorage</span>
+            <a
+              href="https://aistudio.google.com/app/apikey"
+              target="_blank"
+              rel="noreferrer"
+              className="text-zinc-300 underline hover:text-white"
+            >
+              Get free key ↗
+            </a>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1 font-sans">
+            {hasSavedKey && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 py-2 rounded-lg border border-zinc-800 text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+              >
+                Keep Existing
+              </button>
+            )}
+            <button
+              type="submit"
+              className="flex-1 py-2 rounded-lg bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors flex items-center justify-center gap-1.5"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Save Key
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );
