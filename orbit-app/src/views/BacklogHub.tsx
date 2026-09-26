@@ -9,12 +9,13 @@ import {
   Circle, 
   PlayCircle,
   RefreshCw,
-  Key
+  Key,
+  AlertCircle
 } from 'lucide-react';
 import { fetchPlaylistVideos, YouTubeVideo } from '../lib/youtube';
 import { db } from '../db';
 
-const PLAYLISTS: { subject: string; id: string }[] = [
+const PLAYLISTS = [
   { subject: 'Physics', id: 'PLxyGaR3hEy3gYPGsrnKx-XAi3yV6rocEx' },
   { subject: 'Mathematics', id: 'PLxyGaR3hEy3hJnlzYRfM6-sFuIEj0WRoC' },
   { subject: 'Physical Chemistry', id: 'PLxyGaR3hEy3hVmPjmool3j3U78cTYxYq-' },
@@ -23,12 +24,21 @@ const PLAYLISTS: { subject: string; id: string }[] = [
 ];
 
 export const BacklogHub: React.FC = () => {
-  const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('orbit_yt_api_key') || '');
+  const getInitialKey = () => {
+    return (
+      (typeof window !== 'undefined' && localStorage.getItem('orbit_yt_api_key')) ||
+      (import.meta.env.VITE_YOUTUBE_API_KEY as string) ||
+      ''
+    );
+  };
+
+  const [apiKey, setApiKey] = useState<string>(getInitialKey);
   const [keyInput, setKeyInput] = useState('');
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
 
   const [videos, setVideos] = useState<YouTubeVideo[]>([]);
   const [loading, setLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string>('Initializing...');
   const [error, setError] = useState<string | null>(null);
 
   const [filter, setFilter] = useState<string>('All');
@@ -46,40 +56,48 @@ export const BacklogHub: React.FC = () => {
     localStorage.setItem('orbit_completed_yt_videos', JSON.stringify(Array.from(completedIds)));
   }, [completedIds]);
 
-  // Load from cache or fetch with key
-  const loadAllPlaylists = async (keyToUse: string, forceRefresh = false) => {
-    if (!keyToUse) {
+  const loadVideos = async (key: string, force = false) => {
+    if (!key) {
+      setStatusMessage('No API key detected. Please add your YouTube API key.');
       setIsKeyModalOpen(true);
       return;
     }
 
     setLoading(true);
     setError(null);
+    setStatusMessage('Connecting to YouTube Data API...');
 
-    if (forceRefresh) {
+    if (force) {
       PLAYLISTS.forEach((p) => localStorage.removeItem(`orbit_yt_cache_${p.id}`));
     }
 
     try {
-      const promises = PLAYLISTS.map((p) => fetchPlaylistVideos(keyToUse, p.id, p.subject));
-      const results = await Promise.all(promises);
+      console.log('[Orbit YT] Triggering fetch for 5 playlists with key length:', key.length);
+      const results = await Promise.all(
+        PLAYLISTS.map((p) => fetchPlaylistVideos(key, p.id, p.subject))
+      );
       const combined = results.flat();
+      console.log('[Orbit YT] Successfully retrieved videos:', combined.length);
       setVideos(combined);
+      setStatusMessage(`Synced ${combined.length} lectures.`);
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Failed to load videos from YouTube.');
+      console.error('[Orbit YT Error]:', err);
+      const msg = err.message || 'Failed to fetch from YouTube API.';
+      setError(msg);
+      setStatusMessage(`Sync failed: ${msg}`);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (apiKey) {
-      loadAllPlaylists(apiKey);
+    const key = getInitialKey();
+    if (key) {
+      loadVideos(key);
     } else {
       setIsKeyModalOpen(true);
     }
-  }, [apiKey]);
+  }, []);
 
   const handleSaveKey = (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,7 +106,7 @@ export const BacklogHub: React.FC = () => {
     localStorage.setItem('orbit_yt_api_key', clean);
     setApiKey(clean);
     setIsKeyModalOpen(false);
-    loadAllPlaylists(clean, true);
+    loadVideos(clean, true);
   };
 
   const toggleComplete = (id: string) => {
@@ -103,8 +121,7 @@ export const BacklogHub: React.FC = () => {
   const handleAddToDailyGoals = async (v: YouTubeVideo) => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      const subjectGroup: 'Physics' | 'Chemistry' | 'Mathematics' = 
-        v.subject.includes('Chemistry') ? 'Chemistry' : (v.subject as 'Physics' | 'Mathematics');
+      const subjectGroup = v.subject.includes('Chemistry') ? 'Chemistry' : (v.subject as 'Physics' | 'Mathematics');
 
       await db.plannerTasks.add({
         date: today,
@@ -134,7 +151,7 @@ export const BacklogHub: React.FC = () => {
   return (
     <div className="min-h-screen bg-black text-white pb-28 pt-4 px-4 max-w-xl mx-auto space-y-5">
       
-      {/* HUD Header */}
+      {/* Header HUD */}
       <div className="border border-zinc-800 bg-zinc-950 p-4 rounded-lg space-y-3 font-mono">
         <div className="flex items-center justify-between">
           <div>
@@ -142,15 +159,15 @@ export const BacklogHub: React.FC = () => {
               Backlog Mission Control
             </h1>
             <p className="text-[11px] text-zinc-500">
-              {videos.length} YouTube Lectures Synchronized
+              {statusMessage}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => loadAllPlaylists(apiKey, true)}
+              onClick={() => loadVideos(apiKey, true)}
               disabled={loading}
               className="p-1.5 rounded border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white transition-colors"
-              title="Sync Playlists"
+              title="Force Refresh Data"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -161,7 +178,7 @@ export const BacklogHub: React.FC = () => {
             >
               <Key className="w-3.5 h-3.5" />
             </button>
-            <div className="text-right">
+            <div className="text-right ml-1">
               <span className="text-xl font-bold text-white tabular-nums">{completionPct}%</span>
               <span className="block text-[9px] uppercase tracking-widest text-zinc-500">Mastered</span>
             </div>
@@ -176,16 +193,20 @@ export const BacklogHub: React.FC = () => {
         </div>
       </div>
 
-      {/* Error banner */}
+      {/* Error Output Banner */}
       {error && (
-        <div className="p-3 bg-red-950/40 border border-red-800/80 rounded-lg text-xs font-mono text-red-300 flex items-center justify-between">
-          <span>{error}</span>
-          <button 
-            onClick={() => setIsKeyModalOpen(true)}
-            className="underline ml-2 hover:text-white"
-          >
-            Update Key
-          </button>
+        <div className="p-3 bg-red-950/40 border border-red-800/80 rounded-lg text-xs font-mono text-red-300 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
+          <div className="flex-1">
+            <p className="font-semibold">YouTube API Error:</p>
+            <p className="text-[11px] text-red-400 mt-0.5">{error}</p>
+            <button 
+              onClick={() => setIsKeyModalOpen(true)}
+              className="underline text-[11px] mt-1.5 inline-block text-white"
+            >
+              Change API Key
+            </button>
+          </div>
         </div>
       )}
 
@@ -206,10 +227,21 @@ export const BacklogHub: React.FC = () => {
         ))}
       </div>
 
-      {/* Video Feed */}
+      {/* Feed Area */}
       {loading && videos.length === 0 ? (
         <div className="p-12 text-center text-xs font-mono text-zinc-500">
+          <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-zinc-400" />
           Syncing full playlists from YouTube API...
+        </div>
+      ) : videos.length === 0 && !loading ? (
+        <div className="p-8 text-center border border-dashed border-zinc-800 rounded-lg space-y-2">
+          <p className="text-xs font-mono text-zinc-400">No lectures loaded yet.</p>
+          <button
+            onClick={() => setIsKeyModalOpen(true)}
+            className="px-3 py-1.5 bg-white text-black text-xs font-semibold rounded font-mono"
+          >
+            Enter YouTube API Key
+          </button>
         </div>
       ) : (
         <div className="space-y-3">
@@ -228,11 +260,9 @@ export const BacklogHub: React.FC = () => {
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  {/* Complete Checkbox */}
                   <button
                     onClick={() => toggleComplete(item.id)}
                     className="mt-1 text-zinc-500 hover:text-white transition-colors shrink-0"
-                    aria-label="Toggle Complete"
                   >
                     {isDone ? (
                       <CheckCircle2 className="w-5 h-5 text-white" />
@@ -241,13 +271,11 @@ export const BacklogHub: React.FC = () => {
                     )}
                   </button>
 
-                  {/* Thumbnail Box */}
                   <a
                     href={targetUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="relative w-28 h-20 shrink-0 rounded-md overflow-hidden border border-zinc-800 bg-zinc-900 group"
-                    title={`Watch ${item.title}`}
                   >
                     <img
                       src={item.thumbnailUrl}
@@ -261,7 +289,6 @@ export const BacklogHub: React.FC = () => {
                     </div>
                   </a>
 
-                  {/* Video Details */}
                   <div className="flex-1 min-w-0">
                     <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
                       {item.subject}
@@ -271,7 +298,6 @@ export const BacklogHub: React.FC = () => {
                       {item.title}
                     </h3>
 
-                    {/* Duration Line */}
                     <div className="flex items-center gap-1.5 mt-1.5 text-[11px] font-mono text-zinc-400">
                       <Clock className="w-3.5 h-3.5 text-zinc-500" />
                       <span>{item.duration}</span>
@@ -279,7 +305,6 @@ export const BacklogHub: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex items-center justify-between pt-2 border-t border-zinc-900/80 font-mono text-xs">
                   <a
                     href={targetUrl}
@@ -315,7 +340,7 @@ export const BacklogHub: React.FC = () => {
         </div>
       )}
 
-      {/* YouTube API Key Modal */}
+      {/* Key Input Modal */}
       {isKeyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
           <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-xl p-6 shadow-2xl space-y-4 font-mono">
@@ -326,7 +351,7 @@ export const BacklogHub: React.FC = () => {
               </h3>
             </div>
             <p className="text-xs text-zinc-400 font-sans">
-              Enter a free Google Cloud API key with <strong>YouTube Data API v3</strong> enabled to pull video metadata directly.
+              Enter a Google Cloud API key with <strong>YouTube Data API v3</strong> enabled.
             </p>
             <form onSubmit={handleSaveKey} className="space-y-4">
               <input
@@ -337,14 +362,14 @@ export const BacklogHub: React.FC = () => {
                 className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-white"
                 autoFocus
               />
-              <div className="flex gap-2">
+              <div className="flex gap-2 font-sans">
                 {apiKey && (
                   <button
                     type="button"
                     onClick={() => setIsKeyModalOpen(false)}
                     className="flex-1 py-1.5 rounded border border-zinc-800 text-xs text-zinc-400 hover:text-white"
                   >
-                    Cancel
+                    Close
                   </button>
                 )}
                 <button
