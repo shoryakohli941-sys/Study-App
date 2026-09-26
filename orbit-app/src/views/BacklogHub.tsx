@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { MANZIL_PLAYLISTS } from '../data/manzilPlaylists';
 import type { ManzilPlaylist } from '../data/manzilPlaylists';
-import { PlayCircle, CheckCircle2, Circle, ExternalLink, Plus, X } from 'lucide-react';
+import { PlayCircle, CheckCircle2, Circle, ExternalLink, Plus, X, Clock } from 'lucide-react';
 
 export const BacklogHub: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<string>('All');
@@ -152,30 +152,31 @@ export const BacklogHub: React.FC = () => {
                   return (
                     <div key={lecture.id} className={`p-4 flex gap-4 transition-colors ${isCompleted ? 'bg-zinc-950/50' : 'hover:bg-zinc-950'}`}>
                       {/* Thumbnail Placeholder / Image with Fallback */}
-                      <div className="relative w-28 h-16 bg-zinc-900 border border-zinc-800 rounded-md shrink-0 flex items-center justify-center overflow-hidden group">
-                         {lecture.videoId ? (
-                            <img
-                              src={`https://img.youtube.com/vi/${lecture.videoId}/hqdefault.jpg`}
-                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                              alt={lecture.title}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                            />
-                         ) : (
-                           <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900">
-                             <PlayCircle className="w-5 h-5 text-zinc-600 mb-1" />
-                             <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-500">{playlist.subject.slice(0,4)} L{index+1}</span>
-                           </div>
-                         )}
-                        <span className="text-zinc-700 font-black text-2xl opacity-20 absolute -right-1 -bottom-2 pointer-events-none">
+                      <div className="w-32 h-20 shrink-0 bg-zinc-900 border border-zinc-800 rounded relative overflow-hidden flex items-center justify-center group">
+                        {lecture.videoId && (
+                          <img
+                            src={`https://img.youtube.com/vi/${lecture.videoId}/hqdefault.jpg`}
+                            className="w-full h-full object-cover relative z-10 group-hover:scale-105 transition-transform"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            alt={lecture.title}
+                          />
+                        )}
+                        <PlayCircle className="w-6 h-6 text-zinc-700 absolute z-0" />
+                        <span className="text-zinc-700 font-black text-3xl opacity-20 absolute -right-1 -bottom-2 pointer-events-none z-0">
                           {String(index + 1).padStart(2, '0')}
                         </span>
                       </div>
 
                       {/* Content */}
                       <div className="flex-1 flex flex-col justify-between py-0.5">
-                        <h4 className={`font-semibold text-sm leading-tight transition-colors ${isCompleted ? 'text-zinc-500 line-through' : 'text-white'}`}>
-                          {lecture.title}
-                        </h4>
+                        <div>
+                          <h4 className={`font-semibold text-sm leading-tight transition-colors ${isCompleted ? 'text-zinc-500 line-through' : 'text-white'}`}>
+                            {lecture.title}
+                          </h4>
+                          <div className="text-xs font-mono text-zinc-500 flex items-center gap-1.5 mt-1">
+                            <Clock className="w-3 h-3" /> {lecture.duration}
+                          </div>
+                        </div>
 
                         <div className="flex items-center justify-between mt-2">
                           <a
@@ -212,24 +213,28 @@ export const BacklogHub: React.FC = () => {
 
                   return (
                     <div key={`custom-${custom.id}`} className={`p-4 flex gap-4 transition-colors ${isCompleted ? 'bg-zinc-950/50' : 'hover:bg-zinc-950'}`}>
-                      <div className="relative w-28 h-16 bg-zinc-900 border border-zinc-800 rounded-md shrink-0 flex items-center justify-center overflow-hidden group">
+                      <div className="w-32 h-20 shrink-0 bg-zinc-900 border border-zinc-800 rounded relative overflow-hidden flex items-center justify-center group">
                         <img
                           src={`https://img.youtube.com/vi/${custom.videoId}/hqdefault.jpg`}
+                          className="w-full h-full object-cover relative z-10 group-hover:scale-105 transition-transform"
                           onError={(e) => { e.currentTarget.style.display = 'none'; }}
                           alt={custom.chapter}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                         />
-                        <span className="text-zinc-700 font-black text-2xl opacity-20 absolute -right-1 -bottom-2 pointer-events-none">
+                        <PlayCircle className="w-6 h-6 text-zinc-700 absolute z-0" />
+                        <span className="text-zinc-700 font-black text-3xl opacity-20 absolute -right-1 -bottom-2 pointer-events-none z-0">
                           C{String(index + 1).padStart(2, '0')}
                         </span>
                       </div>
 
                       <div className="flex-1 flex flex-col justify-between py-0.5">
-                        <div className="flex flex-col gap-0.5">
+                        <div>
                            <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Custom Entry</span>
                            <h4 className={`font-semibold text-sm leading-tight transition-colors ${isCompleted ? 'text-zinc-500 line-through' : 'text-white'}`}>
                              {custom.chapter}
                            </h4>
+                           <div className="text-xs font-mono text-zinc-500 flex items-center gap-1.5 mt-1">
+                            <Clock className="w-3 h-3" /> Custom
+                          </div>
                         </div>
 
                         <div className="flex items-center justify-between mt-2">

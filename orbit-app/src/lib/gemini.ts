@@ -18,8 +18,8 @@ export interface GeminiResponse {
 
 export const analyzeImage = async (base64Image: string): Promise<GeminiResponse> => {
   const apiKey = getGeminiApiKey();
-  if (!apiKey) {
-    throw new Error('No API key found');
+  if (!apiKey || apiKey.trim() === '') {
+    throw new Error('Google AI Studio API Key is missing or empty. Please set it in Settings.');
   }
 
   const ai = new GoogleGenAI({ apiKey });

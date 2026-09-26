@@ -1,11 +1,15 @@
 import React, { useState, useRef } from 'react';
 import { Camera, Loader2 } from 'lucide-react';
 import { processImage } from '../lib/image';
-import { analyzeImage } from '../lib/gemini';
+import { analyzeImage, getGeminiApiKey } from '../lib/gemini';
 import type { GeminiResponse } from '../lib/gemini';
 import { HintCard } from '../components/HintCard';
 
-export const FightMode: React.FC = () => {
+interface FightModeProps {
+  onRequestSettings?: () => void;
+}
+
+export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
   const [image, setImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,9 +24,22 @@ export const FightMode: React.FC = () => {
   ];
   const [tipIndex, setTipIndex] = useState(0);
 
+  const handleCaptureClick = () => {
+    if (!getGeminiApiKey()) {
+      onRequestSettings?.();
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (!getGeminiApiKey()) {
+      onRequestSettings?.();
+      return;
+    }
 
     try {
       setIsProcessing(true);
@@ -71,7 +88,7 @@ export const FightMode: React.FC = () => {
           </p>
 
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={handleCaptureClick}
             className="bg-white hover:bg-zinc-200 text-black font-semibold py-3 px-8 rounded-full shadow-lg transition-all active:scale-95 flex items-center gap-2"
           >
             <Camera className="w-5 h-5" />
