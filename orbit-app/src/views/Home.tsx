@@ -134,29 +134,29 @@ export const Home: React.FC<{ onNavigate: (tab: TabType) => void }> = ({ onNavig
       <div className="flex flex-col gap-4 pt-2">
         <h2 className="text-3xl font-black tracking-tighter text-white">{greeting}</h2>
 
-        {/* Modular Techy HUD */}
-        <div className="bg-black border border-zinc-800 rounded-xl p-4 shadow-[0_0_20px_rgba(255,255,255,0.02)]">
-          <div className="flex justify-between items-center mb-3">
-            <div className="text-[10px] text-zinc-400 font-bold tracking-widest uppercase flex items-center gap-2">
-              <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
-              TARGET: {settings.targetExamName.toUpperCase()}
-            </div>
+        {/* Architectural / Industrial HUD */}
+        <div className="border border-zinc-800/80 bg-zinc-950 p-4 rounded-sm flex flex-col shadow-none">
+          <div className="flex items-center gap-2 mb-4 border-b border-zinc-800/80 pb-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></div>
+            <span className="text-[10px] font-mono font-extralight tracking-widest text-zinc-400 uppercase">
+              CHRONO // {settings.targetExamName.toUpperCase().replace(/\s+/g, '_')}
+            </span>
           </div>
 
-          <div className="flex justify-between gap-2">
+          <div className="flex justify-between items-stretch gap-px bg-zinc-800/80 p-px rounded-sm">
             {[
               { val: countdown.d, label: 'DAYS' },
               { val: countdown.h, label: 'HRS' },
               { val: countdown.m, label: 'MIN' },
               { val: countdown.s, label: 'SEC' }
             ].map((unit, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center">
-                <div className="w-full bg-zinc-950 border border-zinc-800 rounded-md py-3 text-center mb-1">
-                  <span className="text-xl md:text-2xl font-black text-white font-mono tracking-tighter">
-                    {String(unit.val).padStart(2, '0')}
-                  </span>
-                </div>
-                <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">{unit.label}</span>
+              <div key={i} className="flex-1 bg-zinc-950 flex flex-col items-center py-4">
+                <span className="text-3xl sm:text-4xl font-mono font-extralight text-white tabular-nums tracking-widest">
+                  {String(unit.val).padStart(2, '0')}
+                </span>
+                <span className="mt-2 text-[10px] tracking-widest text-zinc-500 font-mono uppercase">
+                  {unit.label}
+                </span>
               </div>
             ))}
           </div>

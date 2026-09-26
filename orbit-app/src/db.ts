@@ -65,6 +65,14 @@ export interface LectureProgress {
   updatedAt: number;
 }
 
+export interface CustomLecture {
+  id?: number;
+  subject: string;
+  chapter: string;
+  videoId: string;
+  createdAt: number;
+}
+
 export class OrbitDatabase extends Dexie {
   mistakes!: Table<Mistake>;
   calendarEvents!: Table<CalendarEvent>;
@@ -72,6 +80,7 @@ export class OrbitDatabase extends Dexie {
   focusSessions!: Table<FocusSession>;
   userSettings!: Table<UserSettings>;
   lectureProgress!: Table<LectureProgress>;
+  customLectures!: Table<CustomLecture>;
 
   constructor() {
     super('OrbitDB');
@@ -111,6 +120,15 @@ export class OrbitDatabase extends Dexie {
       focusSessions: '++id, date, durationMinutes, createdAt',
       userSettings: '++id, targetExamName, targetExamDate',
       lectureProgress: '++id, videoId, subject, completed, updatedAt'
+    });
+    this.version(6).stores({
+      mistakes: '++id, subject, chapter, subtopic, errorType, nextReviewDate, reviewStage, createdAt',
+      calendarEvents: '++id, date, title, category, isAllDay, startTime, endTime, details, scoreData, createdAt',
+      plannerTasks: '++id, date, title, subject, completed, priority, createdAt',
+      focusSessions: '++id, date, durationMinutes, createdAt',
+      userSettings: '++id, targetExamName, targetExamDate',
+      lectureProgress: '++id, videoId, subject, completed, updatedAt',
+      customLectures: '++id, subject, chapter, videoId, createdAt'
     });
   }
 }
