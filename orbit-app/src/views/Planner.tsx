@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import type { PlannerTask } from '../db';
@@ -13,16 +13,14 @@ const PRESETS = [
   { title: 'Calculus Revision', subject: 'Mathematics' }
 ] as const;
 
+import { useTimer } from '../context/TimerContext';
+
 export const Planner: React.FC = () => {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskSubject, setNewTaskSubject] = useState<PlannerTask['subject']>('General');
   const [filterDate, setFilterDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
-  // Timer state (180 minutes = 10800 seconds)
-  const [timeLeft, setTimeLeft] = useState(10800);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [completedSessions, setCompletedSessions] = useState(0);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const { timeLeft, isTimerRunning, toggleTimer, resetTimer, completedSessions } = useTimer();
 
   const tasks = useLiveQuery(
     () => db.plannerTasks.where('date').equals(filterDate).toArray(),
@@ -44,34 +42,6 @@ export const Planner: React.FC = () => {
 
   const toggleTask = async (task: PlannerTask) => {
     await db.plannerTasks.update(task.id!, { completed: !task.completed });
-  };
-
-  // Timer Logic
-  useEffect(() => {
-    if (isTimerRunning) {
-      timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current!);
-            setIsTimerRunning(false);
-            setCompletedSessions(s => s + 1);
-            return 10800;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isTimerRunning]);
-
-  const toggleTimer = () => setIsTimerRunning(!isTimerRunning);
-  const resetTimer = () => {
-    setIsTimerRunning(false);
-    setTimeLeft(10800);
   };
 
   const formatTime = (seconds: number) => {

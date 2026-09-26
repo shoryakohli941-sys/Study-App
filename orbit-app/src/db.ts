@@ -43,10 +43,26 @@ export interface PlannerTask {
   createdAt: number;
 }
 
+export interface FocusSession {
+  id?: number;
+  date: string; // YYYY-MM-DD
+  durationMinutes: number;
+  createdAt: number;
+}
+
+export interface UserSettings {
+  id?: number;
+  targetExamName: string;
+  targetExamDate: string; // YYYY-MM-DD
+  geminiApiKey: string;
+}
+
 export class OrbitDatabase extends Dexie {
   mistakes!: Table<Mistake>;
   calendarEvents!: Table<CalendarEvent>;
   plannerTasks!: Table<PlannerTask>;
+  focusSessions!: Table<FocusSession>;
+  userSettings!: Table<UserSettings>;
 
   constructor() {
     super('OrbitDB');
@@ -71,6 +87,13 @@ export class OrbitDatabase extends Dexie {
         if (event.category === 'School Holiday') event.category = 'School / Holiday';
         if (event.category === 'Revision Target') event.category = 'Study Block / Revision';
       });
+    });
+    this.version(4).stores({
+      mistakes: '++id, subject, chapter, subtopic, errorType, nextReviewDate, reviewStage, createdAt',
+      calendarEvents: '++id, date, title, category, isAllDay, startTime, endTime, details, scoreData, createdAt',
+      plannerTasks: '++id, date, title, subject, completed, priority, createdAt',
+      focusSessions: '++id, date, durationMinutes, createdAt',
+      userSettings: '++id, targetExamName, targetExamDate'
     });
   }
 }
