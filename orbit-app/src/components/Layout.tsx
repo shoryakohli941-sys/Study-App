@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export type TabType = 'home' | 'fight' | 'vault' | 'calendar' | 'planner';
+export type TabType = 'home' | 'fight' | 'vault' | 'calendar' | 'planner' | 'backlog';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -19,7 +19,7 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, onSettingsClick }) => {
   return (
     <div className="min-h-screen bg-black text-white flex flex-col font-sans">
-      <header className="sticky top-0 z-50 bg-black/80 backdrop-blur-md border-b border-zinc-900">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-md border-b border-zinc-900">
         <div className="max-w-screen-sm mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full border-2 border-white flex items-center justify-center bg-black">
@@ -39,7 +39,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
         </div>
       </header>
 
-      <main className="flex-1 max-w-screen-sm w-full mx-auto p-4 overflow-y-auto pb-24">
+      <main className="flex-1 max-w-screen-sm w-full mx-auto p-4 pt-20 pb-24 overflow-y-auto">
         {children}
       </main>
 
