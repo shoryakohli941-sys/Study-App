@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import type { PlannerTask } from '../db';
-import { Camera, Play, CheckCircle2, Zap, Calendar as CalendarIcon, CheckSquare, ListTodo, Plus, ChevronRight, BrainCircuit } from 'lucide-react';
+import { Camera, Play, CheckCircle2, Zap, Calendar as CalendarIcon, CheckSquare, ListTodo, Plus, ChevronRight, Video } from 'lucide-react';
 import { useTimer } from '../context/TimerContext';
 import type { TabType } from '../components/Layout';
+import { MANZIL_PLAYLISTS } from '../data/manzilPlaylists';
 
 export const Home: React.FC<{ onNavigate: (tab: TabType) => void }> = ({ onNavigate }) => {
   const { toggleTimer, isTimerRunning, completedSessions } = useTimer();
@@ -16,7 +17,7 @@ export const Home: React.FC<{ onNavigate: (tab: TabType) => void }> = ({ onNavig
 
   // Live Queries
   const userSettings = useLiveQuery(() => db.userSettings.toArray());
-  const settings = userSettings?.[0] || { targetExamName: 'JEE Main', targetExamDate: '2027-01-24' };
+  const settings = userSettings?.[0] || { targetExamName: 'JEE MAIN SESSION 1', targetExamDate: '2027-01-24T00:00:00Z' };
 
   const dueMistakes = useLiveQuery(
     () => db.mistakes.where('nextReviewDate').belowOrEqual(Date.now()).toArray(),
@@ -34,15 +35,38 @@ export const Home: React.FC<{ onNavigate: (tab: TabType) => void }> = ({ onNavig
   );
 
   const allMistakes = useLiveQuery(() => db.mistakes.toArray());
+  const allLectureProgress = useLiveQuery(() => db.lectureProgress.toArray());
+
+  // Techy Live Ticking Countdown HUD State
+  const [countdown, setCountdown] = useState({ d: 0, h: 0, m: 0, s: 0 });
+
+  useEffect(() => {
+    const targetDateStr = settings.targetExamDate.includes('T') ? settings.targetExamDate : `${settings.targetExamDate}T00:00:00`;
+    const target = new Date(targetDateStr).getTime();
+
+    const updateTimer = () => {
+      const now = new Date().getTime();
+      const distance = target - now;
+
+      if (distance < 0) {
+        setCountdown({ d: 0, h: 0, m: 0, s: 0 });
+        return;
+      }
+
+      setCountdown({
+        d: Math.floor(distance / (1000 * 60 * 60 * 24)),
+        h: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+        m: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
+        s: Math.floor((distance % (1000 * 60)) / 1000)
+      });
+    };
+
+    updateTimer(); // Initial call
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [settings.targetExamDate]);
 
   // Calculations
-  const daysToJee = useMemo(() => {
-    if (!settings.targetExamDate) return 0;
-    const target = new Date(settings.targetExamDate);
-    const diffTime = Math.abs(target.getTime() - today.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  }, [settings.targetExamDate, today]);
-
   const trapsMastered = useMemo(() => {
     return allMistakes?.filter(m => m.reviewStage === 3).length || 0;
   }, [allMistakes]);
@@ -90,15 +114,51 @@ export const Home: React.FC<{ onNavigate: (tab: TabType) => void }> = ({ onNavig
     return `${formattedHour}:${m} ${ampm}`;
   };
 
+  // Backlog Math
+  const backlogStats = useMemo(() => {
+    let totalLectures = 0;
+    MANZIL_PLAYLISTS.forEach(p => totalLectures += p.lectures.length);
+
+    if (totalLectures === 0 || !allLectureProgress) return { percent: 0, text: "0/0" };
+
+    const completedLectures = allLectureProgress.filter(p => p.completed).length;
+    return {
+      percent: Math.round((completedLectures / totalLectures) * 100),
+      text: `${completedLectures}/${totalLectures}`
+    };
+  }, [allLectureProgress]);
+
   return (
     <div className="flex flex-col gap-6 pb-4">
-      {/* 1. Header & Milestone Countdown */}
-      <div className="flex flex-col gap-2 pt-2">
+      {/* 1. Header & Live Techy Countdown */}
+      <div className="flex flex-col gap-4 pt-2">
         <h2 className="text-3xl font-black tracking-tighter text-white">{greeting}</h2>
-        <div className="flex items-center gap-3">
-          <div className="bg-white text-black px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider inline-flex items-center gap-1.5 shadow-[0_0_15px_rgba(255,255,255,0.1)]">
-            <TargetIcon className="w-3 h-3" />
-            {settings.targetExamName} • {daysToJee}d left
+
+        {/* Modular Techy HUD */}
+        <div className="bg-black border border-zinc-800 rounded-xl p-4 shadow-[0_0_20px_rgba(255,255,255,0.02)]">
+          <div className="flex justify-between items-center mb-3">
+            <div className="text-[10px] text-zinc-400 font-bold tracking-widest uppercase flex items-center gap-2">
+              <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+              TARGET: {settings.targetExamName.toUpperCase()}
+            </div>
+          </div>
+
+          <div className="flex justify-between gap-2">
+            {[
+              { val: countdown.d, label: 'DAYS' },
+              { val: countdown.h, label: 'HRS' },
+              { val: countdown.m, label: 'MIN' },
+              { val: countdown.s, label: 'SEC' }
+            ].map((unit, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center">
+                <div className="w-full bg-zinc-950 border border-zinc-800 rounded-md py-3 text-center mb-1">
+                  <span className="text-xl md:text-2xl font-black text-white font-mono tracking-tighter">
+                    {String(unit.val).padStart(2, '0')}
+                  </span>
+                </div>
+                <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">{unit.label}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -139,13 +199,18 @@ export const Home: React.FC<{ onNavigate: (tab: TabType) => void }> = ({ onNavig
         </button>
 
         <button
-          onClick={() => onNavigate('vault')}
+          onClick={() => onNavigate('backlog')}
           className="bg-black border border-zinc-800 hover:bg-zinc-900 p-4 rounded-xl flex flex-col gap-3 transition-transform active:scale-[0.98]"
         >
-          <BrainCircuit className="w-6 h-6 text-zinc-400" />
-          <div className="text-left">
-            <h3 className="font-bold text-sm text-white uppercase tracking-tight">Review Vault</h3>
-            <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">Quick Log</p>
+          <div className="flex justify-between w-full">
+            <Video className="w-6 h-6 text-zinc-400" />
+            <span className="text-[10px] font-bold font-mono text-zinc-400">{backlogStats.percent}%</span>
+          </div>
+          <div className="text-left w-full">
+            <h3 className="font-bold text-sm text-white uppercase tracking-tight truncate">Backlog Hub</h3>
+            <div className="w-full h-1 bg-zinc-900 rounded-full mt-1.5 overflow-hidden">
+               <div className="h-full bg-white" style={{ width: `${backlogStats.percent}%` }}></div>
+            </div>
           </div>
         </button>
       </div>
@@ -283,14 +348,3 @@ export const Home: React.FC<{ onNavigate: (tab: TabType) => void }> = ({ onNavig
     </div>
   );
 };
-
-// Extracted mini icon for clean usage
-function TargetIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <circle cx="12" cy="12" r="10" />
-      <circle cx="12" cy="12" r="6" />
-      <circle cx="12" cy="12" r="2" />
-    </svg>
-  );
-}

@@ -5,6 +5,7 @@ import { WarmupVault } from './views/WarmupVault';
 import { Calendar } from './views/Calendar';
 import { Planner } from './views/Planner';
 import { Home } from './views/Home';
+import { BacklogHub } from './views/BacklogHub';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { getGeminiApiKey } from './lib/gemini';
 import './App.css';
@@ -31,6 +32,7 @@ function App() {
         {activeTab === 'vault' && <WarmupVault />}
         {activeTab === 'calendar' && <Calendar />}
         {activeTab === 'planner' && <Planner />}
+        {activeTab === 'backlog' && <BacklogHub />}
       </Layout>
 
       {showSettings && (

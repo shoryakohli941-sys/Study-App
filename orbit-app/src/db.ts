@@ -57,12 +57,21 @@ export interface UserSettings {
   geminiApiKey: string;
 }
 
+export interface LectureProgress {
+  id?: number;
+  videoId: string;
+  completed: boolean;
+  subject: string;
+  updatedAt: number;
+}
+
 export class OrbitDatabase extends Dexie {
   mistakes!: Table<Mistake>;
   calendarEvents!: Table<CalendarEvent>;
   plannerTasks!: Table<PlannerTask>;
   focusSessions!: Table<FocusSession>;
   userSettings!: Table<UserSettings>;
+  lectureProgress!: Table<LectureProgress>;
 
   constructor() {
     super('OrbitDB');
@@ -94,6 +103,14 @@ export class OrbitDatabase extends Dexie {
       plannerTasks: '++id, date, title, subject, completed, priority, createdAt',
       focusSessions: '++id, date, durationMinutes, createdAt',
       userSettings: '++id, targetExamName, targetExamDate'
+    });
+    this.version(5).stores({
+      mistakes: '++id, subject, chapter, subtopic, errorType, nextReviewDate, reviewStage, createdAt',
+      calendarEvents: '++id, date, title, category, isAllDay, startTime, endTime, details, scoreData, createdAt',
+      plannerTasks: '++id, date, title, subject, completed, priority, createdAt',
+      focusSessions: '++id, date, durationMinutes, createdAt',
+      userSettings: '++id, targetExamName, targetExamDate',
+      lectureProgress: '++id, videoId, subject, completed, updatedAt'
     });
   }
 }
