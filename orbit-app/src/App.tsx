@@ -4,12 +4,13 @@ import { FightMode } from './views/FightMode';
 import { WarmupVault } from './views/WarmupVault';
 import { Calendar } from './views/Calendar';
 import { Planner } from './views/Planner';
+import { Home } from './views/Home';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { getGeminiApiKey } from './lib/gemini';
 import './App.css';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<TabType>('fight');
+  const [activeTab, setActiveTab] = useState<TabType>('home');
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
@@ -25,6 +26,7 @@ function App() {
         onTabChange={setActiveTab}
         onSettingsClick={() => setShowSettings(true)}
       >
+        {activeTab === 'home' && <Home onNavigate={setActiveTab} />}
         {activeTab === 'fight' && <FightMode />}
         {activeTab === 'vault' && <WarmupVault />}
         {activeTab === 'calendar' && <Calendar />}

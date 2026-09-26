@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, Shield, BrainCircuit, Calendar as CalendarIcon, CheckSquare } from 'lucide-react';
+import { Settings, Shield, BrainCircuit, Calendar as CalendarIcon, CheckSquare, Home } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export type TabType = 'fight' | 'vault' | 'calendar' | 'planner';
+export type TabType = 'home' | 'fight' | 'vault' | 'calendar' | 'planner';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -43,8 +43,20 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
         {children}
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-black border-t border-zinc-900 z-50">
+      <nav className="fixed bottom-0 left-0 right-0 bg-black border-t border-zinc-900 z-50 pb-safe">
         <div className="max-w-screen-sm mx-auto flex">
+          <button
+            onClick={() => onTabChange('home')}
+            className={cn(
+              "flex-1 py-4 flex flex-col justify-center items-center gap-1 transition-colors",
+              activeTab === 'home'
+                ? "text-white"
+                : "text-zinc-500 hover:text-zinc-300"
+            )}
+          >
+            <Home className="w-5 h-5" />
+            <span className="text-[10px] font-medium uppercase tracking-wider">Home</span>
+          </button>
           <button
             onClick={() => onTabChange('fight')}
             className={cn(
