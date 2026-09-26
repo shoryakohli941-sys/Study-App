@@ -1,9 +1,49 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, ExternalLink, Target, Check, Film, CheckCircle2, Circle } from 'lucide-react';
+import { 
+  Clock, 
+  ExternalLink, 
+  Target, 
+  Check, 
+  Film, 
+  CheckCircle2, 
+  Circle, 
+  PlayCircle 
+} from 'lucide-react';
 import { BACKLOG_CHAPTERS, PLAYLIST_LINKS, Chapter } from '../data/manzilPlaylists';
 import { db } from '../db';
 
 type SubjectFilter = 'All' | 'Physics' | 'Mathematics' | 'Physical Chemistry' | 'Organic Chemistry' | 'Inorganic Chemistry';
+
+type BacklogItem = Chapter & {
+  videoId?: string;
+  title?: string;
+};
+
+// Robust YouTube Thumbnail component with no-referrer & wireframe fallback
+const YouTubeThumbnail: React.FC<{ videoId?: string; title: string }> = ({ videoId, title }) => {
+  const [hasError, setHasError] = useState(false);
+
+  if (!videoId || videoId.length !== 11 || hasError) {
+    return (
+      <div className="w-full h-full bg-zinc-900 border border-zinc-800 flex flex-col items-center justify-center p-2 text-center select-none">
+        <PlayCircle className="w-5 h-5 text-zinc-600 mb-1 group-hover:text-zinc-300 transition-colors" />
+        <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-tighter">ONE-SHOT</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
+      alt={title}
+      referrerPolicy="no-referrer"
+      crossOrigin="anonymous"
+      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+      loading="lazy"
+      onError={() => setHasError(true)}
+    />
+  );
+};
 
 export const BacklogHub: React.FC = () => {
   const [filter, setFilter] = useState<SubjectFilter>('All');
@@ -33,7 +73,7 @@ export const BacklogHub: React.FC = () => {
       await db.plannerTasks.add({
         date: today,
         title: `Manzil: ${ch.chapter}`,
-        subject: ch.subject.includes('Chemistry') ? 'Chemistry' : ch.subject,
+        subject: ch.subject.includes('Chemistry') ? 'Chemistry' : (ch.subject as 'Physics' | 'Chemistry' | 'Mathematics'),
         completed: false,
         priority: ch.weightage === 'High' ? 'high' : 'medium',
         createdAt: Date.now()
@@ -52,13 +92,13 @@ export const BacklogHub: React.FC = () => {
     }
   };
 
-  const filtered = BACKLOG_CHAPTERS.filter((item) => {
+  const filtered = (BACKLOG_CHAPTERS as BacklogItem[]).filter((item) => {
     const matchSub = filter === 'All' || item.subject === filter;
     const matchClass = classFilter === 'All' || item.classLevel === classFilter;
     return matchSub && matchClass;
   });
 
-  const completionPct = Math.round((completedIds.size / BACKLOG_CHAPTERS.length) * 100);
+  const completionPct = Math.round((completedIds.size / (BACKLOG_CHAPTERS.length || 1)) * 100);
 
   return (
     <div className="min-h-screen bg-black text-white pb-28 pt-4 px-4 max-w-xl mx-auto space-y-5">
@@ -129,21 +169,24 @@ export const BacklogHub: React.FC = () => {
           href={PLAYLIST_LINKS[filter]}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center justify-between p-3 rounded bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-300 hover:text-white hover:border-zinc-600 transition-all"
+          className="flex items-center justify-between p-3 rounded bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-300 hover:text-white hover:border-zinc-600 transition-all group"
         >
           <span className="flex items-center gap-2">
-            <Film className="w-4 h-4 text-zinc-500" />
+            <Film className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
             Open Full {filter} Playlist on YouTube
           </span>
-          <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
+          <ExternalLink className="w-3.5 h-3.5 text-zinc-400 group-hover:text-white" />
         </a>
       )}
 
       {/* Chapter Cards Feed */}
-      <div className="space-y-2.5">
+      <div className="space-y-3">
         {filtered.map((item) => {
           const isDone = completedIds.has(item.id);
           const isAdded = addedGoals.has(item.id);
+          const targetUrl = item.videoId
+            ? `https://www.youtube.com/watch?v=${item.videoId}`
+            : `https://www.youtube.com/results?search_query=PW+Manzil+JEE+${encodeURIComponent(item.chapter)}`;
 
           return (
             <div
@@ -154,11 +197,12 @@ export const BacklogHub: React.FC = () => {
                   : 'bg-zinc-950 border-zinc-800/80 hover:border-zinc-700'
               }`}
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                
                 {/* Checkbox */}
                 <button
                   onClick={() => toggleComplete(item.id)}
-                  className="mt-0.5 text-zinc-500 hover:text-white transition-colors"
+                  className="mt-1 text-zinc-500 hover:text-white transition-colors shrink-0"
                   aria-label="Toggle Complete"
                 >
                   {isDone ? (
@@ -168,9 +212,23 @@ export const BacklogHub: React.FC = () => {
                   )}
                 </button>
 
+                {/* Left Thumbnail Box */}
+                <a
+                  href={targetUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="relative w-24 h-16 sm:w-28 sm:h-20 shrink-0 rounded-md overflow-hidden border border-zinc-800 bg-zinc-900 group"
+                  title={`Watch ${item.chapter}`}
+                >
+                  <YouTubeThumbnail videoId={item.videoId} title={item.chapter} />
+                  <div className="absolute inset-0 bg-black/25 group-hover:bg-transparent transition-colors flex items-center justify-center">
+                    <PlayCircle className="w-5 h-5 text-white/80 group-hover:text-white drop-shadow transition-transform group-hover:scale-110" />
+                  </div>
+                </a>
+
                 {/* Chapter Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                     <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider px-1.5 py-0.5 bg-zinc-900 rounded border border-zinc-800">
                       Class {item.classLevel}
                     </span>
@@ -183,11 +241,14 @@ export const BacklogHub: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  <h3 className={`text-sm font-medium leading-snug ${isDone ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>
+
+                  <h3 className={`text-sm font-medium leading-snug line-clamp-2 ${isDone ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>
                     {item.chapter}
                   </h3>
-                  <div className="flex items-center gap-1.5 mt-1 text-[11px] font-mono text-zinc-500">
-                    <Clock className="w-3 h-3" />
+
+                  {/* Duration Line Directly Below Title */}
+                  <div className="flex items-center gap-1 mt-1.5 text-[11px] font-mono text-zinc-500">
+                    <Clock className="w-3 h-3 text-zinc-400" />
                     <span>~{item.estDuration} One-Shot</span>
                   </div>
                 </div>
@@ -195,9 +256,8 @@ export const BacklogHub: React.FC = () => {
 
               {/* Action Buttons */}
               <div className="flex items-center justify-between pt-2 border-t border-zinc-900/80 font-mono text-xs">
-                {/* Search Deep-Link: Directly launches the exact Manzil lecture in YouTube app */}
                 <a
-                  href={`https://www.youtube.com/results?search_query=PW+Manzil+JEE+${encodeURIComponent(item.chapter)}`}
+                  href={targetUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 text-zinc-400 hover:text-white transition-colors"
@@ -210,7 +270,7 @@ export const BacklogHub: React.FC = () => {
                   onClick={() => handleAddToDailyGoals(item)}
                   className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] transition-all border ${
                     isAdded
-                      ? 'bg-white text-black border-white'
+                      ? 'bg-white text-black border-white font-semibold'
                       : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:text-white hover:border-zinc-600'
                   }`}
                 >
@@ -225,6 +285,7 @@ export const BacklogHub: React.FC = () => {
                   )}
                 </button>
               </div>
+
             </div>
           );
         })}
