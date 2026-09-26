@@ -1,340 +1,235 @@
-import React, { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import React, { useState, useEffect } from 'react';
+import { Clock, ExternalLink, Target, Check, Film, CheckCircle2, Circle } from 'lucide-react';
+import { BACKLOG_CHAPTERS, PLAYLIST_LINKS, Chapter } from '../data/manzilPlaylists';
 import { db } from '../db';
-import { MANZIL_PLAYLISTS } from '../data/manzilPlaylists';
-import type { ManzilPlaylist } from '../data/manzilPlaylists';
-import { PlayCircle, CheckCircle2, Circle, ExternalLink, Plus, X, Clock } from 'lucide-react';
+
+type SubjectFilter = 'All' | 'Physics' | 'Mathematics' | 'Physical Chemistry' | 'Organic Chemistry' | 'Inorganic Chemistry';
 
 export const BacklogHub: React.FC = () => {
-  const [activeFilter, setActiveFilter] = useState<string>('All');
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [addSubject, setAddSubject] = useState<string>('Physics');
-  const [addChapter, setAddChapter] = useState<string>('');
-  const [addUrl, setAddUrl] = useState<string>('');
+  const [filter, setFilter] = useState<SubjectFilter>('All');
+  const [classFilter, setClassFilter] = useState<'All' | 11 | 12>('All');
+  const [completedIds, setCompletedIds] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('orbit_completed_backlog');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+  const [addedGoals, setAddedGoals] = useState<Set<string>>(new Set());
 
-  // Load lecture progress and custom lectures from Dexie
-  const progressLogs = useLiveQuery(() => db.lectureProgress.toArray()) || [];
-  const customLectures = useLiveQuery(() => db.customLectures.toArray()) || [];
+  useEffect(() => {
+    localStorage.setItem('orbit_completed_backlog', JSON.stringify(Array.from(completedIds)));
+  }, [completedIds]);
 
-  const toggleLecture = async (lectureId: string, subject: string) => {
-    const existing = progressLogs.find(p => p.videoId === lectureId);
-    if (existing) {
-      await db.lectureProgress.update(existing.id!, {
-        completed: !existing.completed,
-        updatedAt: Date.now()
+  const toggleComplete = (id: string) => {
+    setCompletedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleAddToDailyGoals = async (ch: Chapter) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      await db.plannerTasks.add({
+        date: today,
+        title: `Manzil: ${ch.chapter}`,
+        subject: ch.subject.includes('Chemistry') ? 'Chemistry' : ch.subject,
+        completed: false,
+        priority: ch.weightage === 'High' ? 'high' : 'medium',
+        createdAt: Date.now()
       });
-    } else {
-      await db.lectureProgress.add({
-        videoId: lectureId,
-        completed: true,
-        subject: subject,
-        updatedAt: Date.now()
-      });
+
+      setAddedGoals((prev) => new Set(prev).add(ch.id));
+      setTimeout(() => {
+        setAddedGoals((prev) => {
+          const next = new Set(prev);
+          next.delete(ch.id);
+          return next;
+        });
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to add task:", err);
     }
   };
 
-  const getProgressForPlaylist = (playlist: ManzilPlaylist) => {
-    const customForSubject = customLectures.filter(c => c.subject === playlist.subject);
-    const total = playlist.lectures.length + customForSubject.length;
-    if (total === 0) return { completed: 0, total: 0, percent: 0 };
+  const filtered = BACKLOG_CHAPTERS.filter((item) => {
+    const matchSub = filter === 'All' || item.subject === filter;
+    const matchClass = classFilter === 'All' || item.classLevel === classFilter;
+    return matchSub && matchClass;
+  });
 
-    let completed = 0;
-    playlist.lectures.forEach(l => {
-      const log = progressLogs.find(p => p.videoId === l.id);
-      if (log && log.completed) completed++;
-    });
-    customForSubject.forEach(c => {
-       const log = progressLogs.find(p => p.videoId === `custom_${c.id}`);
-       if (log && log.completed) completed++;
-    });
-
-    return { completed, total, percent: Math.round((completed / total) * 100) };
-  };
-
-  // Filter the playlists to show
-  const displayPlaylists = activeFilter === 'All'
-    ? MANZIL_PLAYLISTS
-    : MANZIL_PLAYLISTS.filter(p => p.subject === activeFilter);
-
-  const handleAddCustomLecture = async () => {
-    if (!addChapter.trim() || !addUrl.trim()) return;
-
-    const match = addUrl.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
-    const videoId = match ? match[1] : '';
-
-    if (!videoId) {
-      alert('Invalid YouTube URL or Video ID');
-      return;
-    }
-
-    await db.customLectures.add({
-      subject: addSubject,
-      chapter: addChapter.trim(),
-      videoId,
-      createdAt: Date.now()
-    });
-
-    setAddChapter('');
-    setAddUrl('');
-    setIsAddModalOpen(false);
-  };
+  const completionPct = Math.round((completedIds.size / BACKLOG_CHAPTERS.length) * 100);
 
   return (
-    <div className="flex flex-col gap-6 h-full pb-8">
-      <div className="flex flex-col gap-2 relative">
-        <h2 className="text-2xl font-black tracking-tighter text-white uppercase">Manzil Backlog Hub</h2>
-        <p className="text-zinc-400 text-sm tracking-wide">Track your one-shot lectures directly from the official PW Manzil series.</p>
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="absolute top-0 right-0 bg-white text-black text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-transform"
-        >
-          <Plus className="w-3.5 h-3.5" /> Add Lecture
-        </button>
+    <div className="min-h-screen bg-black text-white pb-28 pt-4 px-4 max-w-xl mx-auto space-y-5">
+      
+      {/* HUD Header */}
+      <div className="border border-zinc-800 bg-zinc-950 p-4 rounded-lg space-y-3 font-mono">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-base font-bold uppercase tracking-wider text-white">
+              Backlog Mission Control
+            </h1>
+            <p className="text-[11px] text-zinc-500">
+              JEE Class 11 & 12 • Manzil Syllabus Archive
+            </p>
+          </div>
+          <div className="text-right">
+            <span className="text-xl font-bold text-white tabular-nums">{completionPct}%</span>
+            <span className="block text-[9px] uppercase tracking-widest text-zinc-500">Mastered</span>
+          </div>
+        </div>
+
+        {/* Minimalist Progress Track */}
+        <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
+          <div 
+            className="h-full bg-white transition-all duration-500 ease-out" 
+            style={{ width: `${completionPct}%` }}
+          />
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-2 -mx-4 px-4 snap-x">
-        {['All', ...MANZIL_PLAYLISTS.map(p => p.subject)].map(filter => (
+      {/* Class Level Filters */}
+      <div className="flex gap-2 font-mono text-xs">
+        {(['All', 11, 12] as const).map((lvl) => (
           <button
-            key={filter}
-            onClick={() => setActiveFilter(filter)}
-            className={`snap-start whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-colors border ${
-              activeFilter === filter
-                ? 'bg-white text-black border-white'
-                : 'bg-black text-zinc-400 border-zinc-800 hover:text-white hover:bg-zinc-900'
+            key={lvl}
+            onClick={() => setClassFilter(lvl)}
+            className={`px-3 py-1 rounded border transition-colors ${
+              classFilter === lvl 
+                ? 'bg-zinc-200 text-black font-semibold border-zinc-200' 
+                : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-700'
             }`}
           >
-            {filter}
+            {lvl === 'All' ? 'All Classes' : `Class ${lvl}`}
           </button>
         ))}
       </div>
 
-      <div className="space-y-8">
-        {displayPlaylists.map(playlist => {
-          const stats = getProgressForPlaylist(playlist);
-          const customForSubject = customLectures.filter(c => c.subject === playlist.subject);
+      {/* Subject Filter Carousel */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        {(['All', 'Physics', 'Mathematics', 'Physical Chemistry', 'Organic Chemistry', 'Inorganic Chemistry'] as SubjectFilter[]).map((sub) => (
+          <button
+            key={sub}
+            onClick={() => setFilter(sub)}
+            className={`px-3 py-1.5 rounded text-xs font-mono whitespace-nowrap transition-colors border ${
+              filter === sub
+                ? 'bg-white text-black font-bold border-white'
+                : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-700'
+            }`}
+          >
+            {sub}
+          </button>
+        ))}
+      </div>
+
+      {/* Direct Playlist Shortcut */}
+      {filter !== 'All' && PLAYLIST_LINKS[filter] && (
+        <a
+          href={PLAYLIST_LINKS[filter]}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center justify-between p-3 rounded bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-300 hover:text-white hover:border-zinc-600 transition-all"
+        >
+          <span className="flex items-center gap-2">
+            <Film className="w-4 h-4 text-zinc-500" />
+            Open Full {filter} Playlist on YouTube
+          </span>
+          <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
+        </a>
+      )}
+
+      {/* Chapter Cards Feed */}
+      <div className="space-y-2.5">
+        {filtered.map((item) => {
+          const isDone = completedIds.has(item.id);
+          const isAdded = addedGoals.has(item.id);
 
           return (
-            <div key={playlist.id} className="bg-black border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
-              {/* Subject Header & Progress */}
-              <div className="p-5 border-b border-zinc-800 bg-zinc-950">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-black text-lg text-white uppercase tracking-tight">{playlist.subject} Backlog</h3>
-                  <span className="text-xs font-bold font-mono text-zinc-400 bg-zinc-900 px-2 py-1 rounded">
-                    {stats.completed}/{stats.total} • {stats.percent}%
-                  </span>
-                </div>
-
-                <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden mb-4">
-                  <div
-                    className="h-full bg-white transition-all duration-500 ease-out"
-                    style={{ width: `${stats.percent}%` }}
-                  />
-                </div>
-
-                <a
-                  href={playlist.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-white rounded-md text-xs font-bold uppercase tracking-widest transition-colors"
+            <div
+              key={item.id}
+              className={`p-3.5 rounded-lg border transition-all flex flex-col justify-between gap-3 ${
+                isDone 
+                  ? 'bg-zinc-950/40 border-zinc-900 opacity-60' 
+                  : 'bg-zinc-950 border-zinc-800/80 hover:border-zinc-700'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                {/* Checkbox */}
+                <button
+                  onClick={() => toggleComplete(item.id)}
+                  className="mt-0.5 text-zinc-500 hover:text-white transition-colors"
+                  aria-label="Toggle Complete"
                 >
-                  <PlayCircle className="w-4 h-4" />
-                  Open Official Playlist (30+ Lectures) <ExternalLink className="w-3 h-3" />
-                </a>
+                  {isDone ? (
+                    <CheckCircle2 className="w-5 h-5 text-white" />
+                  ) : (
+                    <Circle className="w-5 h-5 text-zinc-600 hover:text-zinc-400" />
+                  )}
+                </button>
+
+                {/* Chapter Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider px-1.5 py-0.5 bg-zinc-900 rounded border border-zinc-800">
+                      Class {item.classLevel}
+                    </span>
+                    <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+                      {item.subject}
+                    </span>
+                    {item.weightage === 'High' && (
+                      <span className="text-[9px] font-mono text-white bg-zinc-800 px-1.5 py-0.5 rounded font-semibold">
+                        HIGH YIELD
+                      </span>
+                    )}
+                  </div>
+                  <h3 className={`text-sm font-medium leading-snug ${isDone ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>
+                    {item.chapter}
+                  </h3>
+                  <div className="flex items-center gap-1.5 mt-1 text-[11px] font-mono text-zinc-500">
+                    <Clock className="w-3 h-3" />
+                    <span>~{item.estDuration} One-Shot</span>
+                  </div>
+                </div>
               </div>
 
-              {/* Lecture Cards */}
-              <div className="divide-y divide-zinc-900 bg-black">
-                {playlist.lectures.map((lecture, index) => {
-                  const log = progressLogs.find(p => p.videoId === lecture.id);
-                  const isCompleted = log ? log.completed : false;
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-2 border-t border-zinc-900/80 font-mono text-xs">
+                {/* Search Deep-Link: Directly launches the exact Manzil lecture in YouTube app */}
+                <a
+                  href={`https://www.youtube.com/results?search_query=PW+Manzil+JEE+${encodeURIComponent(item.chapter)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-zinc-400 hover:text-white transition-colors"
+                >
+                  Watch Lecture <ExternalLink className="w-3 h-3 ml-0.5" />
+                </a>
 
-                  return (
-                    <div key={lecture.id} className={`p-4 flex gap-4 transition-colors ${isCompleted ? 'bg-zinc-950/50' : 'hover:bg-zinc-950'}`}>
-                      {/* Thumbnail Placeholder / Image with Fallback */}
-                      <div className="w-32 h-20 shrink-0 bg-zinc-900 border border-zinc-800 rounded relative overflow-hidden flex items-center justify-center group">
-                        {lecture.videoId && (
-                          <img
-                            src={`https://img.youtube.com/vi/${lecture.videoId}/hqdefault.jpg`}
-                            className="w-full h-full object-cover relative z-10 group-hover:scale-105 transition-transform"
-                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                            alt={lecture.title}
-                          />
-                        )}
-                        <PlayCircle className="w-6 h-6 text-zinc-700 absolute z-0" />
-                        <span className="text-zinc-700 font-black text-3xl opacity-20 absolute -right-1 -bottom-2 pointer-events-none z-0">
-                          {String(index + 1).padStart(2, '0')}
-                        </span>
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1 flex flex-col justify-between py-0.5">
-                        <div>
-                          <h4 className={`font-semibold text-sm leading-tight transition-colors ${isCompleted ? 'text-zinc-500 line-through' : 'text-white'}`}>
-                            {lecture.title}
-                          </h4>
-                          <div className="text-xs font-mono text-zinc-500 flex items-center gap-1.5 mt-1">
-                            <Clock className="w-3 h-3" /> {lecture.duration}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between mt-2">
-                          <a
-                            href={lecture.videoId ? `https://youtu.be/${lecture.videoId}` : playlist.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[10px] text-zinc-400 hover:text-white font-bold uppercase tracking-wider flex items-center gap-1"
-                          >
-                            Watch <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
-
-                          <button
-                            onClick={() => toggleLecture(lecture.id, playlist.subject)}
-                            className="flex items-center justify-center min-w-[44px] min-h-[44px] -m-2"
-                            aria-label="Toggle completion"
-                          >
-                            {isCompleted ? (
-                              <CheckCircle2 className="w-6 h-6 text-white" />
-                            ) : (
-                              <Circle className="w-6 h-6 text-zinc-600" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Custom Lectures */}
-                {customForSubject.map((custom, index) => {
-                  const logId = `custom_${custom.id}`;
-                  const log = progressLogs.find(p => p.videoId === logId);
-                  const isCompleted = log ? log.completed : false;
-
-                  return (
-                    <div key={`custom-${custom.id}`} className={`p-4 flex gap-4 transition-colors ${isCompleted ? 'bg-zinc-950/50' : 'hover:bg-zinc-950'}`}>
-                      <div className="w-32 h-20 shrink-0 bg-zinc-900 border border-zinc-800 rounded relative overflow-hidden flex items-center justify-center group">
-                        <img
-                          src={`https://img.youtube.com/vi/${custom.videoId}/hqdefault.jpg`}
-                          className="w-full h-full object-cover relative z-10 group-hover:scale-105 transition-transform"
-                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                          alt={custom.chapter}
-                        />
-                        <PlayCircle className="w-6 h-6 text-zinc-700 absolute z-0" />
-                        <span className="text-zinc-700 font-black text-3xl opacity-20 absolute -right-1 -bottom-2 pointer-events-none z-0">
-                          C{String(index + 1).padStart(2, '0')}
-                        </span>
-                      </div>
-
-                      <div className="flex-1 flex flex-col justify-between py-0.5">
-                        <div>
-                           <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Custom Entry</span>
-                           <h4 className={`font-semibold text-sm leading-tight transition-colors ${isCompleted ? 'text-zinc-500 line-through' : 'text-white'}`}>
-                             {custom.chapter}
-                           </h4>
-                           <div className="text-xs font-mono text-zinc-500 flex items-center gap-1.5 mt-1">
-                            <Clock className="w-3 h-3" /> Custom
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between mt-2">
-                          <a
-                            href={`https://youtu.be/${custom.videoId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[10px] text-zinc-400 hover:text-white font-bold uppercase tracking-wider flex items-center gap-1"
-                          >
-                            Watch <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
-
-                          <button
-                            onClick={() => toggleLecture(logId, playlist.subject)}
-                            className="flex items-center justify-center min-w-[44px] min-h-[44px] -m-2"
-                            aria-label="Toggle completion"
-                          >
-                            {isCompleted ? (
-                              <CheckCircle2 className="w-6 h-6 text-white" />
-                            ) : (
-                              <Circle className="w-6 h-6 text-zinc-600" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                {/* Direct Inject into Dexie Goals */}
+                <button
+                  onClick={() => handleAddToDailyGoals(item)}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] transition-all border ${
+                    isAdded
+                      ? 'bg-white text-black border-white'
+                      : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:text-white hover:border-zinc-600'
+                  }`}
+                >
+                  {isAdded ? (
+                    <>
+                      <Check className="w-3 h-3" /> Added to Goals
+                    </>
+                  ) : (
+                    <>
+                      <Target className="w-3 h-3" /> + Add Goal
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Add Custom Lecture Modal */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-950 border border-zinc-800 w-full max-w-sm rounded-xl overflow-hidden shadow-2xl flex flex-col">
-            <div className="flex justify-between items-center p-4 border-b border-zinc-800">
-              <h3 className="text-white font-bold tracking-tight">Add Custom Lecture</h3>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-zinc-500 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-4 flex flex-col gap-4">
-              <div>
-                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Subject</label>
-                <select
-                  value={addSubject}
-                  onChange={(e) => setAddSubject(e.target.value)}
-                  className="w-full bg-black border border-zinc-800 rounded-md py-2 px-3 text-sm text-white focus:outline-none focus:border-zinc-500"
-                >
-                  {MANZIL_PLAYLISTS.map(p => (
-                    <option key={p.subject} value={p.subject}>{p.subject}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Chapter Name</label>
-                <input
-                  type="text"
-                  value={addChapter}
-                  onChange={(e) => setAddChapter(e.target.value)}
-                  placeholder="e.g. Thermodynamics 02"
-                  className="w-full bg-black border border-zinc-800 rounded-md py-2 px-3 text-sm text-white focus:outline-none focus:border-zinc-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">YouTube URL or Video ID</label>
-                <input
-                  type="text"
-                  value={addUrl}
-                  onChange={(e) => setAddUrl(e.target.value)}
-                  placeholder="e.g. https://youtu.be/dQw4w9WgXcQ"
-                  className="w-full bg-black border border-zinc-800 rounded-md py-2 px-3 text-sm text-white focus:outline-none focus:border-zinc-500"
-                />
-              </div>
-            </div>
-
-            <div className="p-4 border-t border-zinc-800 flex gap-2">
-              <button
-                onClick={() => setIsAddModalOpen(false)}
-                className="flex-1 py-2 rounded-md font-bold text-xs uppercase tracking-wider text-zinc-400 hover:text-white transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddCustomLecture}
-                disabled={!addChapter.trim() || !addUrl.trim()}
-                className="flex-1 py-2 rounded-md font-bold text-xs uppercase tracking-wider bg-white text-black disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-200 transition-colors"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
