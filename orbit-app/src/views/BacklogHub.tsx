@@ -24,7 +24,6 @@ const ChapterThumbnail: React.FC<{
 }> = ({ videoId, title, subject, duration }) => {
   const [loadError, setLoadError] = useState(false);
 
-  // If a valid YouTube video ID exists, load the official high-res image
   if (videoId && videoId.length === 11 && !loadError) {
     return (
       <div className="relative w-28 h-20 shrink-0 rounded-md overflow-hidden bg-zinc-900 border border-zinc-800">
@@ -44,20 +43,19 @@ const ChapterThumbnail: React.FC<{
     );
   }
 
-  // Guaranteed fallback card: Crisp OLED studio card
-  const getSubjectCode = (sub: string) => {
-    if (sub === 'Physics') return 'PHY';
-    if (sub === 'Mathematics') return 'MATH';
-    if (sub.includes('Organic')) return 'OC';
-    if (sub.includes('Inorganic')) return 'IOC';
+  const getSubCode = (s: string) => {
+    if (s === 'Physics') return 'PHY';
+    if (s === 'Mathematics') return 'MATH';
+    if (s.includes('Organic')) return 'OC';
+    if (s.includes('Inorganic')) return 'IOC';
     return 'PC';
   };
 
   return (
-    <div className="relative w-28 h-20 shrink-0 rounded-md bg-zinc-900 border border-zinc-800 flex flex-col justify-between p-2 select-none group-hover:border-zinc-700 transition-colors">
+    <div className="relative w-28 h-20 shrink-0 rounded-md bg-zinc-950 border border-zinc-800 flex flex-col justify-between p-2 select-none group-hover:border-zinc-700 transition-colors">
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-mono font-bold tracking-wider text-zinc-300">
-          {getSubjectCode(subject)}
+          {getSubCode(subject)}
         </span>
         <PlayCircle className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
       </div>
@@ -88,7 +86,7 @@ export const BacklogHub: React.FC = () => {
   });
 
   const [addedGoals, setAddedGoals] = useState<Set<string>>(new Set());
-  const [lastAddedTitle, setLastAddedTitle] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem('orbit_completed_backlog', JSON.stringify(Array.from(completedIds)));
@@ -104,33 +102,44 @@ export const BacklogHub: React.FC = () => {
     });
   };
 
-  // One-tap injection into Dexie Planner targets
+  const getLocalDate = () => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
   const handleAddToDailyGoals = async (ch: Chapter, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
 
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const localToday = getLocalDate();
       const subjectGroup: 'Physics' | 'Chemistry' | 'Mathematics' = 
         ch.subject.includes('Chemistry') ? 'Chemistry' : (ch.subject as 'Physics' | 'Mathematics');
 
       const taskPayload = {
-        date: today,
+        date: localToday,
         title: `Manzil: ${ch.chapter}`,
+        text: `Manzil: ${ch.chapter}`,
+        name: `Manzil: ${ch.chapter}`,
         subject: subjectGroup,
         completed: false,
-        priority: (ch.weightage === 'High' ? 'high' : 'medium') as 'high' | 'medium' | 'low',
+        priority: 'high',
         createdAt: Date.now()
       };
 
-      // Safe write: handles both db.plannerTasks or fallback db.tasks table
-      if ((db as any).plannerTasks) {
-        await (db as any).plannerTasks.add(taskPayload);
-      } else if ((db as any).tasks) {
-        await (db as any).tasks.add(taskPayload);
+      const table = (db as any).plannerTasks || (db as any).tasks;
+      if (table) {
+        try {
+          await table.add(taskPayload);
+        } catch {
+          await table.add({ ...taskPayload, id: Date.now() });
+        }
       }
 
       setAddedGoals((prev) => new Set(prev).add(ch.id));
-      setLastAddedTitle(ch.chapter);
+      setToastMessage(`Added to Goals: ${ch.chapter}`);
 
       setTimeout(() => {
         setAddedGoals((prev) => {
@@ -140,13 +149,20 @@ export const BacklogHub: React.FC = () => {
         });
       }, 3000);
 
-      setTimeout(() => {
-        setLastAddedTitle(null);
-      }, 4000);
+      setTimeout(() => setToastMessage(null), 3500);
     } catch (err) {
       console.error('Failed to add goal:', err);
     }
   };
+
+  const subjectOptions: readonly SubjectFilter[] = [
+    'All',
+    'Physics',
+    'Mathematics',
+    'Physical Chemistry',
+    'Organic Chemistry',
+    'Inorganic Chemistry'
+  ];
 
   const filtered = BACKLOG_CHAPTERS.filter((item) => {
     const matchSub = filter === 'All' || item.subject === filter;
@@ -166,11 +182,11 @@ export const BacklogHub: React.FC = () => {
       <div className="border border-zinc-800 bg-zinc-950 p-4 rounded-xl space-y-3 font-mono">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-base font-bold uppercase tracking-wider text-white flex items-center gap-2">
+            <h1 className="text-base font-bold uppercase tracking-wider text-white">
               Backlog Mission Control
             </h1>
             <p className="text-[11px] text-zinc-500">
-              {BACKLOG_CHAPTERS.length} Lectures • PW Manzil Archive
+              {BACKLOG_CHAPTERS.length} Chapters • Full PW Manzil Feed
             </p>
           </div>
           <div className="text-right">
@@ -179,7 +195,6 @@ export const BacklogHub: React.FC = () => {
           </div>
         </div>
 
-        {/* Minimalist Progress Track */}
         <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
           <div 
             className="h-full bg-white transition-all duration-500 ease-out" 
@@ -188,11 +203,11 @@ export const BacklogHub: React.FC = () => {
         </div>
       </div>
 
-      {/* Floating Confirmation Toast */}
-      {lastAddedTitle && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-white text-black px-4 py-2 rounded-full shadow-2xl font-mono text-xs flex items-center gap-2 animate-bounce">
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Added to Today's Goals: <strong>{lastAddedTitle}</strong></span>
+      {/* Floating Status Toast */}
+      {toastMessage && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-white text-black px-4 py-2 rounded-full shadow-2xl font-mono text-xs flex items-center gap-2">
+          <Sparkles className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate max-w-[280px]">{toastMessage}</span>
         </div>
       )}
 
@@ -203,12 +218,12 @@ export const BacklogHub: React.FC = () => {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search chapter or topic (e.g. Rotational, GOC, Integration)..."
+          placeholder="Filter chapter (e.g. Kinematics, GOC, Integration)..."
           className="w-full pl-9 pr-4 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
         />
       </div>
 
-      {/* Class Level Filter Pills */}
+      {/* Class Level Filters */}
       <div className="flex gap-2 font-mono text-xs">
         {(['All', 11, 12] as const).map((lvl) => (
           <button
@@ -227,7 +242,7 @@ export const BacklogHub: React.FC = () => {
 
       {/* Subject Filter Carousel */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-        {(['All', 'Physics', 'Mathematics', 'Physical Chemistry', 'Organic Chemistry', 'Inorganic Chemistry'] as SubjectFilter[]).map((sub) => (
+        {subjectOptions.map((sub) => (
           <button
             key={sub}
             onClick={() => setFilter(sub)}
@@ -252,13 +267,13 @@ export const BacklogHub: React.FC = () => {
         >
           <span className="flex items-center gap-2">
             <Film className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
-            Open Full {filter} Manzil Playlist on YouTube
+            Open Official {filter} Playlist on YouTube
           </span>
           <ExternalLink className="w-3.5 h-3.5 text-zinc-400 group-hover:text-white" />
         </a>
       )}
 
-      {/* Interactive Chapter Cards Feed */}
+      {/* Feed */}
       <div className="space-y-2.5">
         {filtered.map((item) => {
           const isDone = completedIds.has(item.id);
@@ -275,12 +290,11 @@ export const BacklogHub: React.FC = () => {
                 isDone 
                   ? 'bg-zinc-950/40 border-zinc-900 opacity-60' 
                   : isAdded
-                  ? 'bg-zinc-900 border-white/50'
+                  ? 'bg-zinc-900 border-white/60'
                   : 'bg-zinc-950 border-zinc-800/80 hover:border-zinc-600 hover:bg-zinc-900/50'
               }`}
             >
               <div className="flex items-start gap-3">
-                {/* Checkbox */}
                 <button
                   onClick={(e) => toggleComplete(item.id, e)}
                   className="mt-1 text-zinc-500 hover:text-white transition-colors shrink-0"
@@ -293,7 +307,6 @@ export const BacklogHub: React.FC = () => {
                   )}
                 </button>
 
-                {/* Left Visual Thumbnail */}
                 <div className="shrink-0">
                   <ChapterThumbnail
                     videoId={item.videoId}
@@ -303,7 +316,6 @@ export const BacklogHub: React.FC = () => {
                   />
                 </div>
 
-                {/* Details */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                     <span className="text-[9px] font-mono text-zinc-400 uppercase tracking-wider px-1.5 py-0.5 bg-zinc-900 rounded border border-zinc-800">
@@ -323,7 +335,6 @@ export const BacklogHub: React.FC = () => {
                     {item.chapter}
                   </h3>
 
-                  {/* Runtime */}
                   <div className="flex items-center gap-1 mt-1 text-[11px] font-mono text-zinc-400">
                     <Clock className="w-3 h-3 text-zinc-500" />
                     <span>~{item.duration} One-Shot</span>
@@ -331,7 +342,6 @@ export const BacklogHub: React.FC = () => {
                 </div>
               </div>
 
-              {/* Action Bar */}
               <div className="flex items-center justify-between pt-2 border-t border-zinc-900 font-mono text-xs">
                 <a
                   href={targetUrl}
@@ -353,7 +363,7 @@ export const BacklogHub: React.FC = () => {
                 >
                   {isAdded ? (
                     <>
-                      <Check className="w-3 h-3 text-black" /> In Daily Goals
+                      <Check className="w-3 h-3 text-black" /> In Goals
                     </>
                   ) : (
                     <>
