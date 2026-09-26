@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Key, X } from 'lucide-react';
+import { getGeminiApiKey } from '../lib/gemini';
 
 interface ApiKeyModalProps {
   onClose: () => void;
@@ -25,7 +26,13 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ onClose }) => {
     });
   }, []);
 
+  const hasKey = !!getGeminiApiKey();
+
   const handleSave = async () => {
+    if (!apiKey.trim()) {
+      alert("Please enter a valid API Key.");
+      return;
+    }
     localStorage.setItem('gemini_api_key', apiKey.trim());
     const { db } = await import('../db');
     const settings = await db.userSettings.toArray();
@@ -40,12 +47,14 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ onClose }) => {
   return (
     <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-zinc-950 border border-zinc-800 rounded-lg w-full max-w-sm overflow-hidden shadow-2xl relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-1 text-zinc-400 hover:text-white transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        {hasKey && (
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-1 text-zinc-400 hover:text-white transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
         <div className="p-6">
           <div className="w-12 h-12 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center mb-4">
             <Key className="w-6 h-6 text-white" />

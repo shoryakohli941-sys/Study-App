@@ -28,7 +28,7 @@ function App() {
         onSettingsClick={() => setShowSettings(true)}
       >
         {activeTab === 'home' && <Home onNavigate={setActiveTab} />}
-        {activeTab === 'fight' && <FightMode />}
+        {activeTab === 'fight' && <FightMode onRequestSettings={() => setShowSettings(true)} />}
         {activeTab === 'vault' && <WarmupVault />}
         {activeTab === 'calendar' && <Calendar />}
         {activeTab === 'planner' && <Planner />}
