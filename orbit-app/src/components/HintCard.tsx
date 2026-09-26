@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Target, Lightbulb, Unlock, ChevronDown, Check, Inbox } from 'lucide-react';
+import { Target, Lightbulb, Unlock } from 'lucide-react';
 import type { GeminiResponse } from '../lib/gemini';
 import { db } from '../db';
 
@@ -17,6 +17,7 @@ export const HintCard: React.FC<HintCardProps> = ({ data, image, onReset }) => {
   const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const [showSaveMenu, setShowSaveMenu] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const startHold = () => {
     if (revealedSolution) return;
@@ -52,11 +53,15 @@ export const HintCard: React.FC<HintCardProps> = ({ data, image, onReset }) => {
         reviewStage: 0,
         createdAt: Date.now(),
       });
-      alert('Saved to Vault!');
-      onReset();
+      setToastMessage('Saved to Vault!');
+      setTimeout(() => {
+        setToastMessage(null);
+        onReset();
+      }, 2000);
     } catch (err) {
       console.error(err);
-      alert('Failed to save to vault.');
+      setToastMessage('Failed to save to vault.');
+      setTimeout(() => setToastMessage(null), 2000);
     }
   };
 
@@ -151,13 +156,17 @@ export const HintCard: React.FC<HintCardProps> = ({ data, image, onReset }) => {
         )}
       </div>
 
-      <div className="p-4 border-t border-zinc-800 flex gap-3">
+      <div className="p-4 border-t border-zinc-800 flex gap-3 relative">
+        {toastMessage && (
+          <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-white text-black px-4 py-2 rounded shadow-lg font-semibold whitespace-nowrap z-50">
+            {toastMessage}
+          </div>
+        )}
         <button
           onClick={onReset}
           className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
         >
-          <Check className="w-4 h-4" />
-          Cracked It
+          Cracked It! 🎯
         </button>
 
         <div className="relative flex-1">
@@ -165,9 +174,7 @@ export const HintCard: React.FC<HintCardProps> = ({ data, image, onReset }) => {
             onClick={() => setShowSaveMenu(!showSaveMenu)}
             className="w-full py-2.5 bg-white hover:bg-zinc-200 text-black rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
           >
-            <Inbox className="w-4 h-4" />
-            Vault
-            <ChevronDown className="w-4 h-4" />
+            Add to Error Vault 📥
           </button>
 
           {showSaveMenu && (

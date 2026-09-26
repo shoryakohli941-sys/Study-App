@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
-import { Target, Sigma, RotateCcw, Rocket, CheckCircle2 } from 'lucide-react';
+import { Target, Sigma, Rocket, CheckCircle2 } from 'lucide-react';
 
 export const WarmupVault: React.FC = () => {
   const currentReviewIndex = 0; // We always show the first due mistake because the array shifts automatically
@@ -22,9 +22,9 @@ export const WarmupVault: React.FC = () => {
         <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center mb-6">
           <CheckCircle2 className="w-10 h-10 text-white" />
         </div>
-        <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">All caught up!</h2>
+        <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">All caught up for today! Back to problem solving 🚀</h2>
         <p className="text-zinc-400 mb-8 max-w-sm">
-          You've completed today's warmup. Back to problem solving.
+          You've completed today's warmup.
         </p>
       </div>
     );
@@ -110,7 +110,7 @@ export const WarmupVault: React.FC = () => {
               <div className="flex items-start gap-3">
                 <Target className="w-5 h-5 text-white shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-semibold text-white mb-1 uppercase tracking-tight text-sm">The Trap</h3>
+                  <h3 className="font-semibold text-red-500 mb-1 uppercase tracking-tight text-sm">The Trap</h3>
                   <p className="text-zinc-300 text-sm leading-relaxed">{currentMistake.theTrap}</p>
                 </div>
               </div>
@@ -134,15 +134,13 @@ export const WarmupVault: React.FC = () => {
               onClick={(e) => { e.stopPropagation(); handleReview('tough'); }}
               className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 border border-zinc-800"
             >
-              <RotateCcw className="w-4 h-4" />
-              Still Tough
+              Still Tough 🔄
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); handleReview('mastered'); }}
               className="flex-1 py-3 bg-white hover:bg-zinc-200 text-black rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
             >
-              <Rocket className="w-4 h-4" />
-              Mastered
+              Mastered 🚀
             </button>
           </div>
         </div>
