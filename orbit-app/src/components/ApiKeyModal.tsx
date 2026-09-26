@@ -38,7 +38,6 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose }) => 
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm"
       onClick={() => {
-        // Only allow clicking outside to dismiss IF a key already exists
         if (hasSavedKey) onClose();
       }}
     >
@@ -56,7 +55,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose }) => 
                 Gemini API Key
               </h3>
               <p className="text-[11px] text-zinc-400 font-mono">
-                Saved locally on this device
+                Stored permanently on this device
               </p>
             </div>
           </div>
