@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Loader2, Send } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Camera, Loader2, Send, Clipboard } from 'lucide-react';
 import { processImage } from '../lib/image';
 import { analyzeImage, hasValidApiKey } from '../lib/gemini';
 import type { GeminiResponse } from '../lib/gemini';
@@ -27,6 +27,76 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
   const [katexReady, setKatexReady] = useState(
     typeof window !== 'undefined' && !!window.renderMathInElement
   );
+
+  // Helper to process any image File or Blob (from input, drag-and-drop, or clipboard)
+  const handleIncomingImageFile = useCallback(async (file: File | Blob) => {
+    if (!hasValidApiKey()) {
+      onRequestSettings?.();
+      return;
+    }
+
+    try {
+      setError(null);
+      const processedBase64 = await processImage(file as File);
+      setPendingImage(processedBase64);
+      setUserNote('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to process image.');
+    }
+  }, [onRequestSettings]);
+
+  // Global Clipboard (Ctrl+V / Cmd+V) Listener for screenshots
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (isProcessing) return;
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            handleIncomingImageFile(file);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [isProcessing, handleIncomingImageFile]);
+
+  // Button-triggered clipboard read for laptops
+  const handlePasteClick = async () => {
+    if (!hasValidApiKey()) {
+      onRequestSettings?.();
+      return;
+    }
+
+    try {
+      if (!navigator.clipboard?.read) {
+        setError('Direct clipboard reading is blocked by your browser. Press Ctrl+V (or Cmd+V) to paste.');
+        return;
+      }
+
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find((t) => t.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const file = new File([blob], 'screenshot.png', { type: imageType });
+          await handleIncomingImageFile(file);
+          return;
+        }
+      }
+      setError('No image found in your clipboard. Take a screenshot or copy an image first.');
+    } catch {
+      setError('Clipboard permission denied. Use Ctrl+V (or Cmd+V) to paste directly.');
+    }
+  };
 
   // Dynamically load KaTeX without requiring npm installations
   useEffect(() => {
@@ -69,7 +139,7 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
       });
   }, []);
 
-  // Automatically parse math symbols inside HintCard and FightMode
+  // Automatically render LaTeX formulas inside HintCard
   useEffect(() => {
     if (!katexReady || !mathContainerRef.current) return;
 
@@ -119,10 +189,10 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
   }, [katexReady, geminiData]);
 
   const tips = [
-    "Analyzing reference frames...",
-    "Scanning for constraint relations...",
-    "Checking sign conventions...",
-    "Looking for the trap..."
+    'Analyzing reference frames...',
+    'Scanning for constraint relations...',
+    'Checking sign conventions...',
+    'Looking for the trap...',
   ];
   const [tipIndex, setTipIndex] = useState(0);
 
@@ -137,20 +207,7 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (!hasValidApiKey()) {
-      onRequestSettings?.();
-      return;
-    }
-
-    try {
-      setError(null);
-      const processedBase64 = await processImage(file);
-      setPendingImage(processedBase64);
-      setUserNote('');
-    } catch (err: any) {
-      setError(err.message || "Failed to process image.");
-    }
+    await handleIncomingImageFile(file);
   };
 
   const handleSubmitForAnalysis = async () => {
@@ -166,13 +223,12 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
         setTipIndex((prev) => (prev + 1) % tips.length);
       }, 1500);
 
-      // Note is optional - if left blank, Gemini just analyzes the image as normal.
       const data = await analyzeImage(pendingImage, userNote);
       setGeminiData(data);
 
       clearInterval(tipInterval);
     } catch (err: any) {
-      setError(err.message || "Failed to process image.");
+      setError(err.message || 'Failed to process image.');
     } finally {
       setIsProcessing(false);
       setPendingImage(null);
@@ -199,16 +255,26 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
           </div>
           <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">Log a Tricky Problem</h2>
           <p className="text-zinc-400 mb-8 max-w-sm">
-            Snap a photo of a JEE problem you're stuck on. Our Socratic mentor will guide you without spoiling the answer.
+            Snap a photo, choose an image, or paste a screenshot (<kbd className="px-1.5 py-0.5 bg-zinc-800 rounded border border-zinc-700 text-xs text-zinc-300 font-mono">Ctrl+V</kbd>).
           </p>
 
-          <button
-            onClick={handleCaptureClick}
-            className="bg-white hover:bg-zinc-200 text-black font-semibold py-3 px-8 rounded-full shadow-lg transition-all active:scale-95 flex items-center gap-2"
-          >
-            <Camera className="w-5 h-5" />
-            Capture Problem
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={handleCaptureClick}
+              className="bg-white hover:bg-zinc-200 text-black font-semibold py-3 px-6 rounded-full shadow-lg transition-all active:scale-95 flex items-center gap-2"
+            >
+              <Camera className="w-5 h-5" />
+              Capture / Upload
+            </button>
+
+            <button
+              onClick={handlePasteClick}
+              className="bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700 font-medium py-3 px-6 rounded-full transition-all active:scale-95 flex items-center gap-2"
+            >
+              <Clipboard className="w-4 h-4 text-zinc-400" />
+              Paste Screenshot
+            </button>
+          </div>
 
           <input
             type="file"
