@@ -11,7 +11,8 @@ import {
   Search,
   Sparkles
 } from 'lucide-react';
-import { BACKLOG_CHAPTERS, PLAYLIST_LINKS, Chapter } from '../data/manzilPlaylists';
+import { BACKLOG_CHAPTERS, PLAYLIST_LINKS } from '../data/manzilPlaylists';
+import type { Chapter } from '../data/manzilPlaylists';
 import { db } from '../db';
 
 type SubjectFilter = 'All' | 'Physics' | 'Mathematics' | 'Physical Chemistry' | 'Organic Chemistry' | 'Inorganic Chemistry';
