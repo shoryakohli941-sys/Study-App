@@ -7,7 +7,7 @@ import { Planner } from './views/Planner';
 import { Home } from './views/Home';
 import { BacklogHub } from './views/BacklogHub';
 import { ApiKeyModal } from './components/ApiKeyModal';
-import { getGeminiApiKey } from './lib/gemini';
+import { hasValidApiKey } from './lib/gemini';
 import './App.css';
 
 function App() {
@@ -15,7 +15,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
-    if (!getGeminiApiKey()) {
+    if (!hasValidApiKey()) {
       setShowSettings(true);
     }
   }, []);
@@ -36,7 +36,7 @@ function App() {
       </Layout>
 
       {showSettings && (
-        <ApiKeyModal onClose={() => setShowSettings(false)} />
+        <ApiKeyModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
       )}
     </>
   );
