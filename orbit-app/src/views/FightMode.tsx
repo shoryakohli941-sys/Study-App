@@ -1,9 +1,15 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Loader2, Send } from 'lucide-react';
 import { processImage } from '../lib/image';
 import { analyzeImage, hasValidApiKey } from '../lib/gemini';
 import type { GeminiResponse } from '../lib/gemini';
 import { HintCard } from '../components/HintCard';
+
+declare global {
+  interface Window {
+    renderMathInElement?: (elem: HTMLElement, options?: object) => void;
+  }
+}
 
 interface FightModeProps {
   onRequestSettings?: () => void;
@@ -17,6 +23,100 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
   const [error, setError] = useState<string | null>(null);
   const [geminiData, setGeminiData] = useState<GeminiResponse | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mathContainerRef = useRef<HTMLDivElement>(null);
+  const [katexReady, setKatexReady] = useState(
+    typeof window !== 'undefined' && !!window.renderMathInElement
+  );
+
+  // Dynamically load KaTeX without requiring npm installations
+  useEffect(() => {
+    if (window.renderMathInElement) {
+      setKatexReady(true);
+      return;
+    }
+
+    if (!document.getElementById('katex-css')) {
+      const link = document.createElement('link');
+      link.id = 'katex-css';
+      link.rel = 'stylesheet';
+      link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css';
+      document.head.appendChild(link);
+    }
+
+    const loadScript = (src: string, id: string): Promise<void> => {
+      return new Promise((resolve) => {
+        if (document.getElementById(id)) {
+          resolve();
+          return;
+        }
+        const script = document.createElement('script');
+        script.id = id;
+        script.src = src;
+        script.onload = () => resolve();
+        document.head.appendChild(script);
+      });
+    };
+
+    loadScript('https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js', 'katex-js')
+      .then(() =>
+        loadScript(
+          'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js',
+          'katex-autorender'
+        )
+      )
+      .then(() => {
+        setKatexReady(true);
+      });
+  }, []);
+
+  // Automatically parse math symbols inside HintCard and FightMode
+  useEffect(() => {
+    if (!katexReady || !mathContainerRef.current) return;
+
+    const renderMath = () => {
+      if (!mathContainerRef.current || !window.renderMathInElement) return;
+      try {
+        window.renderMathInElement(mathContainerRef.current, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '\\(', right: '\\)', display: false },
+          ],
+          throwOnError: false,
+        });
+      } catch {
+        // Fallback gracefully if any formatting is malformed
+      }
+    };
+
+    renderMath();
+
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let isRendering = false;
+
+    const observer = new MutationObserver(() => {
+      if (isRendering) return;
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        if (!mathContainerRef.current) return;
+        isRendering = true;
+        observer.disconnect();
+        renderMath();
+        if (mathContainerRef.current) {
+          observer.observe(mathContainerRef.current, { childList: true, subtree: true });
+        }
+        isRendering = false;
+      }, 50);
+    });
+
+    observer.observe(mathContainerRef.current, { childList: true, subtree: true });
+
+    return () => {
+      clearTimeout(timeoutId);
+      observer.disconnect();
+    };
+  }, [katexReady, geminiData]);
 
   const tips = [
     "Analyzing reference frames...",
@@ -91,7 +191,7 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div ref={mathContainerRef} className="flex flex-col gap-6">
       {!pendingImage && !image && (
         <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
           <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center mb-6">
