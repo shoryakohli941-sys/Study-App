@@ -18,6 +18,7 @@ interface FightModeProps {
 export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [userNote, setUserNote] = useState('');
+  const [responseLength, setResponseLength] = useState<'small' | 'medium' | 'long'>('medium');
   const [image, setImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +29,7 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
     typeof window !== 'undefined' && !!window.renderMathInElement
   );
 
-  // Helper to process any image File or Blob (from input, drag-and-drop, or clipboard)
+  // Helper to process any image File or Blob (from input or clipboard)
   const handleIncomingImageFile = useCallback(async (file: File | Blob) => {
     if (!hasValidApiKey()) {
       onRequestSettings?.();
@@ -69,7 +70,7 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
     return () => window.removeEventListener('paste', handlePaste);
   }, [isProcessing, handleIncomingImageFile]);
 
-  // Button-triggered clipboard read for laptops
+  // Direct clipboard button click
   const handlePasteClick = async () => {
     if (!hasValidApiKey()) {
       onRequestSettings?.();
@@ -98,7 +99,7 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
     }
   };
 
-  // Dynamically load KaTeX without requiring npm installations
+  // Dynamically inject KaTeX without npm package installs
   useEffect(() => {
     if (window.renderMathInElement) {
       setKatexReady(true);
@@ -139,7 +140,7 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
       });
   }, []);
 
-  // Automatically render LaTeX formulas inside HintCard
+  // Format math inside HintCard and FightMode dynamically
   useEffect(() => {
     if (!katexReady || !mathContainerRef.current) return;
 
@@ -156,7 +157,7 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
           throwOnError: false,
         });
       } catch {
-        // Fallback gracefully if any formatting is malformed
+        // Fallback gracefully
       }
     };
 
@@ -223,7 +224,19 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
         setTipIndex((prev) => (prev + 1) % tips.length);
       }, 1500);
 
-      const data = await analyzeImage(pendingImage, userNote);
+      const lengthInstructions = {
+        small: 'Keep hints and explanations extremely concise, bite-sized, and quick to read (1-2 punchy lines per step).',
+        medium: 'Provide a balanced, standard step-by-step guidance with clear milestones.',
+        long: 'Provide a comprehensive, in-depth breakdown exploring the underlying principles, edge cases, and alternate approaches.',
+      };
+
+      const formattingDirective = `[Formatting & Tone Directive: Detail Level = "${responseLength.toUpperCase()}" (${lengthInstructions[responseLength]}). Make the explanation visually dynamic and vibrant by incorporating contextual emojis (e.g., 💡, ⚡, 🎯, ⚠️, 🚀, 🧠, 🔍) in headings, key observations, and steps. Avoid dry text, but preserve standard LaTeX delimiters ($...$ and $$...$$) for all math.]`;
+
+      const promptPayload = userNote.trim()
+        ? `${userNote.trim()}\n\n${formattingDirective}`
+        : formattingDirective;
+
+      const data = await analyzeImage(pendingImage, promptPayload);
       setGeminiData(data);
 
       clearInterval(tipInterval);
@@ -293,23 +306,39 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
             <img src={pendingImage} alt="Selected problem" className="w-full h-full object-contain" />
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-              Anything specific you got stuck on? <span className="text-zinc-600">(optional)</span>
-            </label>
-            <textarea
-              value={userNote}
-              onChange={(e) => setUserNote(e.target.value)}
-              placeholder="e.g. I couldn't figure out which direction the friction acts in step 2..."
-              rows={3}
-              className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors resize-none"
-            />
-            <p className="text-[11px] text-zinc-600 mt-1">
-              Leave blank and it'll just analyze the problem as usual.
-            </p>
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                Anything specific you got stuck on? <span className="text-zinc-600">(optional)</span>
+              </label>
+              <textarea
+                value={userNote}
+                onChange={(e) => setUserNote(e.target.value)}
+                placeholder="e.g. I couldn't figure out which direction the friction acts in step 2..."
+                rows={3}
+                className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors resize-none"
+              />
+            </div>
+
+            {/* Response Depth & Visual Style Selector */}
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1.5 flex items-center justify-between">
+                <span>Explanation Depth</span>
+                <span className="text-[11px] text-zinc-500 font-normal">Includes expressive emojis ✨</span>
+              </label>
+              <select
+                value={responseLength}
+                onChange={(e) => setResponseLength(e.target.value as 'small' | 'medium' | 'long')}
+                className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-white transition-colors cursor-pointer"
+              >
+                <option value="small">⚡ Small — Punchy & Quick hints</option>
+                <option value="medium">🎯 Medium — Balanced step-by-step guidance</option>
+                <option value="long">🧠 Long — Comprehensive deep-dive & edge cases</option>
+              </select>
+            </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 pt-1">
             <button
               onClick={handleReset}
               className="flex-1 py-2.5 rounded-lg border border-zinc-800 text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
