@@ -5,7 +5,7 @@ import type { PlannerTask } from '../db';
 import { Camera, Play, CheckCircle2, Zap, Calendar as CalendarIcon, CheckSquare, ListTodo, Plus, ChevronRight, Video } from 'lucide-react';
 import { useTimer } from '../context/TimerContext';
 import type { TabType } from '../components/Layout';
-import { MANZIL_PLAYLISTS } from '../data/manzilPlaylists';
+import { BACKLOG_CHAPTERS } from '../data/manzilPlaylists';
 
 export const Home: React.FC<{ onNavigate: (tab: TabType) => void }> = ({ onNavigate }) => {
   const { toggleTimer, isTimerRunning, completedSessions } = useTimer();
@@ -116,8 +116,7 @@ export const Home: React.FC<{ onNavigate: (tab: TabType) => void }> = ({ onNavig
 
   // Backlog Math
   const backlogStats = useMemo(() => {
-    let totalLectures = 0;
-    MANZIL_PLAYLISTS.forEach(p => totalLectures += p.lectures.length);
+    const totalLectures = BACKLOG_CHAPTERS.length;
 
     if (totalLectures === 0 || !allLectureProgress) return { percent: 0, text: "0/0" };
 
