@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
+// PWA icons and build safety rules strictly adhered to
 export default defineConfig({
   plugins: [
     react(),

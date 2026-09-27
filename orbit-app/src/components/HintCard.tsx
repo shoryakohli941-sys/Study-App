@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Target, Lightbulb, Unlock, ChevronDown, Check, Inbox } from 'lucide-react';
+import { Target, Lightbulb, Unlock } from 'lucide-react';
 import type { GeminiResponse } from '../lib/gemini';
 import { db } from '../db';
 
@@ -156,8 +156,7 @@ export const HintCard: React.FC<HintCardProps> = ({ data, image, onReset }) => {
           onClick={onReset}
           className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
         >
-          <Check className="w-4 h-4" />
-          Cracked It
+          Cracked It! 🎯
         </button>
 
         <div className="relative flex-1">
@@ -165,9 +164,7 @@ export const HintCard: React.FC<HintCardProps> = ({ data, image, onReset }) => {
             onClick={() => setShowSaveMenu(!showSaveMenu)}
             className="w-full py-2.5 bg-white hover:bg-zinc-200 text-black rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
           >
-            <Inbox className="w-4 h-4" />
-            Vault
-            <ChevronDown className="w-4 h-4" />
+            Add to Error Vault 📥
           </button>
 
           {showSaveMenu && (

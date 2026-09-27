@@ -34,3 +34,73 @@ export const getGeminiClient = (): GoogleGenAI => {
   }
   return new GoogleGenAI({ apiKey: key });
 };
+
+export interface GeminiResponse {
+  subject: "Physics" | "Chemistry" | "Mathematics";
+  chapter: string;
+  subtopic: string;
+  the_trap: string;
+  hint_1_lens: string;
+  hint_2_setup: string;
+  hint_3_pivot: string;
+  key_formula: string;
+  full_solution: string;
+}
+
+export const analyzeImage = async (base64DataUrl: string): Promise<GeminiResponse> => {
+  const ai = getGeminiClient();
+
+  // Strip data URL prefix
+  const base64 = base64DataUrl.replace(/^data:image\/[a-z]+;base64,/, '');
+
+  const systemInstruction = `You are an elite JEE Advanced Socratic mentor. Analyze the question image and return structured JSON matching:
+{
+  "subject": "Physics" | "Chemistry" | "Mathematics",
+  "chapter": "string",
+  "subtopic": "string",
+  "the_trap": "1-sentence warning of where students miscalculate or pick the wrong approach",
+  "hint_1_lens": "Fundamental governing principle or reference frame (NO equations)",
+  "hint_2_setup": "First step equation, constraint relation, or FBD setup",
+  "hint_3_pivot": "The algebraic or conceptual bottleneck",
+  "key_formula": "Critical formula or condition in standard text format",
+  "full_solution": "Concise step-by-step resolution"
+}`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          {
+            inlineData: {
+              data: base64,
+              mimeType: 'image/jpeg',
+            },
+          },
+          { text: "Analyze the image and provide the required structured JSON." }
+        ],
+      },
+    ],
+    config: {
+      systemInstruction: systemInstruction,
+      responseMimeType: 'application/json',
+    },
+  });
+
+  const text = response.text;
+  if (!text) {
+    throw new Error("No response from Gemini API");
+  }
+
+  // Sanitize markdown code fences
+  const sanitized = text.replace(/^```json/m, '').replace(/```$/m, '').trim();
+
+  try {
+    const data = JSON.parse(sanitized);
+    return data as GeminiResponse;
+  } catch (error) {
+    console.error("Failed to parse Gemini response:", sanitized);
+    throw new Error("Invalid response format from AI");
+  }
+};

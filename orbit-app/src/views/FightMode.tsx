@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Camera, Loader2 } from 'lucide-react';
 import { processImage } from '../lib/image';
-import { analyzeImage, getGeminiApiKey } from '../lib/gemini';
+import { analyzeImage, getApiKey } from '../lib/gemini';
 import type { GeminiResponse } from '../lib/gemini';
 import { HintCard } from '../components/HintCard';
 
@@ -25,7 +25,7 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
   const [tipIndex, setTipIndex] = useState(0);
 
   const handleCaptureClick = () => {
-    if (!getGeminiApiKey()) {
+    if (!getApiKey()) {
       onRequestSettings?.();
       return;
     }
@@ -36,7 +36,7 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!getGeminiApiKey()) {
+    if (!getApiKey()) {
       onRequestSettings?.();
       return;
     }
