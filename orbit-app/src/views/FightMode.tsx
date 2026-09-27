@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Camera, Loader2 } from 'lucide-react';
+import { Camera, Loader2, Send } from 'lucide-react';
 import { processImage } from '../lib/image';
 import { analyzeImage, hasValidApiKey } from '../lib/gemini';
 import type { GeminiResponse } from '../lib/gemini';
@@ -10,6 +10,8 @@ interface FightModeProps {
 }
 
 export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
+  const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [userNote, setUserNote] = useState('');
   const [image, setImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,20 +44,30 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
     }
 
     try {
+      setError(null);
+      const processedBase64 = await processImage(file);
+      setPendingImage(processedBase64);
+      setUserNote('');
+    } catch (err: any) {
+      setError(err.message || "Failed to process image.");
+    }
+  };
+
+  const handleSubmitForAnalysis = async () => {
+    if (!pendingImage) return;
+
+    try {
       setIsProcessing(true);
       setError(null);
       setGeminiData(null);
+      setImage(pendingImage);
 
       const tipInterval = setInterval(() => {
         setTipIndex((prev) => (prev + 1) % tips.length);
       }, 1500);
 
-      // Process image
-      const processedBase64 = await processImage(file);
-      setImage(processedBase64);
-
-      // Call Gemini
-      const data = await analyzeImage(processedBase64);
+      // Note is optional - if left blank, Gemini just analyzes the image as normal.
+      const data = await analyzeImage(pendingImage, userNote);
       setGeminiData(data);
 
       clearInterval(tipInterval);
@@ -63,10 +75,13 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
       setError(err.message || "Failed to process image.");
     } finally {
       setIsProcessing(false);
+      setPendingImage(null);
     }
   };
 
   const handleReset = () => {
+    setPendingImage(null);
+    setUserNote('');
     setImage(null);
     setGeminiData(null);
     setError(null);
@@ -77,7 +92,7 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
 
   return (
     <div className="flex flex-col gap-6">
-      {!image && (
+      {!pendingImage && !image && (
         <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
           <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center mb-6">
             <Camera className="w-10 h-10 text-white" />
@@ -103,6 +118,46 @@ export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
             onChange={handleFileChange}
             className="hidden"
           />
+        </div>
+      )}
+
+      {pendingImage && !isProcessing && (
+        <div className="flex flex-col gap-4">
+          <div className="relative aspect-video rounded-xl overflow-hidden bg-black border border-zinc-800">
+            <img src={pendingImage} alt="Selected problem" className="w-full h-full object-contain" />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+              Anything specific you got stuck on? <span className="text-zinc-600">(optional)</span>
+            </label>
+            <textarea
+              value={userNote}
+              onChange={(e) => setUserNote(e.target.value)}
+              placeholder="e.g. I couldn't figure out which direction the friction acts in step 2..."
+              rows={3}
+              className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors resize-none"
+            />
+            <p className="text-[11px] text-zinc-600 mt-1">
+              Leave blank and it'll just analyze the problem as usual.
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleReset}
+              className="flex-1 py-2.5 rounded-lg border border-zinc-800 text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmitForAnalysis}
+              className="flex-1 py-2.5 rounded-lg bg-white text-black text-sm font-semibold hover:bg-zinc-200 transition-colors flex items-center justify-center gap-1.5"
+            >
+              <Send className="w-4 h-4" />
+              Analyze
+            </button>
+          </div>
         </div>
       )}
 
