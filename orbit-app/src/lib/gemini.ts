@@ -72,7 +72,7 @@ Respond with ONLY a raw JSON object (no markdown fences, no preamble) with exact
  * structured Socratic hint breakdown. Throws if the API key is missing
  * or the response can't be parsed as the expected JSON shape.
  */
-export const analyzeImage = async (base64Image: string): Promise<GeminiResponse> => {
+export const analyzeImage = async (base64Image: string, userNote?: string): Promise<GeminiResponse> => {
   const ai = getGeminiClient();
 
   const commaIndex = base64Image.indexOf(',');
@@ -82,15 +82,20 @@ export const analyzeImage = async (base64Image: string): Promise<GeminiResponse>
   const mimeMatch = base64Image.match(/^data:(image\/[a-zA-Z+]+);base64,/);
   const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
 
+  const trimmedNote = userNote?.trim();
+  const promptText = trimmedNote
+    ? `${ANALYZE_PROMPT}\n\nThe student added this note about where they specifically got stuck - pay close attention to it and address it directly in your hints: "${trimmedNote}"`
+    : ANALYZE_PROMPT;
+
   let response;
   try {
     response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash-lite',
+      model: 'gemini-3.8-flash',
       contents: [
         {
           role: 'user',
           parts: [
-            { text: ANALYZE_PROMPT },
+            { text: promptText },
             { inlineData: { mimeType, data: rawBase64 } }
           ]
         }
