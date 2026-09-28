@@ -241,16 +241,16 @@ export const BacklogHub: React.FC = () => {
         ))}
       </div>
 
-      {/* Subject Filter Carousel */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-        {subjectOptions.map((sub) => (
+      {/* Subject Filter (Normal Wrapping Pills) */}
+      <div className="flex flex-wrap gap-1.5 font-mono text-xs">
+        {(['All', 'Physics', 'Mathematics', 'Physical Chemistry', 'Organic Chemistry', 'Inorganic Chemistry'] as SubjectFilter[]).map((sub) => (
           <button
             key={sub}
             onClick={() => setFilter(sub)}
-            className={`px-3 py-1.5 rounded text-xs font-mono whitespace-nowrap transition-colors border ${
+            className={`px-2.5 py-1.5 rounded border text-xs transition-colors ${
               filter === sub
-                ? 'bg-zinc-200 text-black font-bold border-zinc-200'
-                : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-700'
+                ? 'bg-white text-black font-bold border-white'
+                : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-200'
             }`}
           >
             {sub}
