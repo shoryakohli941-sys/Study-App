@@ -9,7 +9,8 @@ import {
   Circle, 
   PlayCircle,
   Search,
-  Sparkles
+  Sparkles,
+  ChevronDown
 } from 'lucide-react';
 
 import { BACKLOG_CHAPTERS, PLAYLIST_LINKS, type Chapter } from '../data/manzilPlaylists';
@@ -221,7 +222,7 @@ export const BacklogHub: React.FC = () => {
           <button
             key={lvl}
             onClick={() => setClassFilter(lvl)}
-            className={`px-3 py-1 rounded border transition-colors ${
+            className={`flex-1 py-1.5 rounded border transition-colors text-center ${
               classFilter === lvl 
                 ? 'bg-white text-black font-semibold border-white' 
                 : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-700'
@@ -232,23 +233,22 @@ export const BacklogHub: React.FC = () => {
         ))}
       </div>
 
-
-      {/* Subject Filter (Wrapping Pills) */}
-<div className="flex flex-wrap gap-1.5">
-  {(['All', 'Physics', 'Mathematics', 'Physical Chemistry', 'Organic Chemistry', 'Inorganic Chemistry'] as SubjectFilter[]).map((sub) => (
-    <button
-      key={sub}
-      onClick={() => setFilter(sub)}
-      className={`px-2.5 py-1 rounded text-xs font-mono transition-colors border ${
-        filter === sub
-          ? 'bg-white text-black font-bold border-white'
-          : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-700'
-      }`}
-    >
-      {sub}
-        </button>
-      ))}
-    </div>
+      {/* Subject Filter (Standard Dropdown Menu) */}
+      <div className="relative font-mono">
+        <select
+          value={filter}
+          onChange={(e) => setFilter(e.target.value as SubjectFilter)}
+          className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-3 pr-10 py-2.5 text-xs text-zinc-200 focus:outline-none focus:border-zinc-500 appearance-none cursor-pointer transition-colors"
+        >
+          <option value="All">All Subjects (Full Syllabus)</option>
+          <option value="Physics">Physics</option>
+          <option value="Mathematics">Mathematics</option>
+          <option value="Physical Chemistry">Physical Chemistry</option>
+          <option value="Organic Chemistry">Organic Chemistry</option>
+          <option value="Inorganic Chemistry">Inorganic Chemistry</option>
+        </select>
+        <ChevronDown className="w-4 h-4 text-zinc-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+      </div>
 
       {/* Direct YouTube Playlist Launcher */}
       {filter !== 'All' && PLAYLIST_LINKS[filter] && (
