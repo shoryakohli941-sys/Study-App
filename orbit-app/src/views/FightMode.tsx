@@ -1,401 +1,296 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Camera, Loader2, Send, Clipboard } from 'lucide-react';
-import { processImage } from '../lib/image';
-import { analyzeImage, hasValidApiKey } from '../lib/gemini';
-import type { GeminiResponse } from '../lib/gemini';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  analyzeImage,
+  analyzeText,
+  hasValidApiKey,
+  getSavedAIModel,
+  saveAIModel,
+  AI_MODELS,
+  type AIModelKey,
+  type GeminiResponse,
+} from '../lib/gemini';
 import { HintCard } from '../components/HintCard';
 
-declare global {
-  interface Window {
-    renderMathInElement?: (elem: HTMLElement, options?: object) => void;
-  }
-}
-
-interface FightModeProps {
-  onRequestSettings?: () => void;
-}
-
-export const FightMode: React.FC<FightModeProps> = ({ onRequestSettings }) => {
-  const [pendingImage, setPendingImage] = useState<string | null>(null);
-  const [userNote, setUserNote] = useState('');
-  const [responseLength, setResponseLength] = useState<'small' | 'medium' | 'long'>('medium');
-  const [image, setImage] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+export const FightMode: React.FC = () => {
+  const [selectedModel, setSelectedModel] = useState<AIModelKey>(getSavedAIModel());
+  const [doubtText, setDoubtText] = useState('');
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [geminiData, setGeminiData] = useState<GeminiResponse | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const mathContainerRef = useRef<HTMLDivElement>(null);
-  const [katexReady, setKatexReady] = useState(
-    typeof window !== 'undefined' && !!window.renderMathInElement
-  );
+  const [analysisResult, setAnalysisResult] = useState<GeminiResponse | null>(null);
 
-  // Helper to process any image File or Blob (from input or clipboard)
-  const handleIncomingImageFile = useCallback(async (file: File | Blob) => {
-    if (!hasValidApiKey()) {
-      onRequestSettings?.();
-      return;
-    }
+  // Practice Timer / Stopwatch
+  const [seconds, setSeconds] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-    try {
-      setError(null);
-      const processedBase64 = await processImage(file as File);
-      setPendingImage(processedBase64);
-      setUserNote('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to process image.');
-    }
-  }, [onRequestSettings]);
-
-  // Global Clipboard (Ctrl+V / Cmd+V) Listener for screenshots
   useEffect(() => {
-    const handlePaste = (e: ClipboardEvent) => {
-      if (isProcessing) return;
+    if (isTimerRunning) {
+      timerRef.current = setInterval(() => {
+        setSeconds((prev) => prev + 1);
+      }, 1000);
+    } else if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isTimerRunning]);
 
-      const items = e.clipboardData?.items;
-      if (!items) return;
+  const formatTime = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
+  const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const next = e.target.value as AIModelKey;
+    setSelectedModel(next);
+    saveAIModel(next);
+    setError(null);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (items) {
       for (let i = 0; i < items.length; i++) {
         if (items[i].type.startsWith('image/')) {
           const file = items[i].getAsFile();
           if (file) {
-            e.preventDefault();
-            handleIncomingImageFile(file);
-            break;
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              setSelectedImage(reader.result as string);
+            };
+            reader.readAsDataURL(file);
           }
+          break;
         }
       }
-    };
+    }
+  };
 
-    window.addEventListener('paste', handlePaste);
-    return () => window.removeEventListener('paste', handlePaste);
-  }, [isProcessing, handleIncomingImageFile]);
-
-  // Direct clipboard button click
-  const handlePasteClick = async () => {
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!hasValidApiKey()) {
-      onRequestSettings?.();
+      setError('Gemini API key is not configured. Please add it in settings.');
       return;
     }
+
+    if (!doubtText.trim() && !selectedImage) {
+      setError('Please type your question or provide an image to analyze.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
 
     try {
-      if (!navigator.clipboard?.read) {
-        setError('Direct clipboard reading is blocked by your browser. Press Ctrl+V (or Cmd+V) to paste.');
-        return;
+      let result: GeminiResponse;
+      if (selectedImage) {
+        // If image is present, pass doubtText as additional instruction
+        result = await analyzeImage(selectedImage, doubtText.trim() || undefined, undefined, selectedModel);
+      } else {
+        // Direct Ask: No image, pure text doubt
+        result = await analyzeText(doubtText.trim(), selectedModel);
       }
-
-      const items = await navigator.clipboard.read();
-      for (const item of items) {
-        const imageType = item.types.find((t) => t.startsWith('image/'));
-        if (imageType) {
-          const blob = await item.getType(imageType);
-          const file = new File([blob], 'screenshot.png', { type: imageType });
-          await handleIncomingImageFile(file);
-          return;
-        }
-      }
-      setError('No image found in your clipboard. Take a screenshot or copy an image first.');
-    } catch {
-      setError('Clipboard permission denied. Use Ctrl+V (or Cmd+V) to paste directly.');
-    }
-  };
-
-  // Dynamically inject KaTeX without npm package installs
-  useEffect(() => {
-    if (window.renderMathInElement) {
-      setKatexReady(true);
-      return;
-    }
-
-    if (!document.getElementById('katex-css')) {
-      const link = document.createElement('link');
-      link.id = 'katex-css';
-      link.rel = 'stylesheet';
-      link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css';
-      document.head.appendChild(link);
-    }
-
-    const loadScript = (src: string, id: string): Promise<void> => {
-      return new Promise((resolve) => {
-        if (document.getElementById(id)) {
-          resolve();
-          return;
-        }
-        const script = document.createElement('script');
-        script.id = id;
-        script.src = src;
-        script.onload = () => resolve();
-        document.head.appendChild(script);
-      });
-    };
-
-    loadScript('https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js', 'katex-js')
-      .then(() =>
-        loadScript(
-          'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js',
-          'katex-autorender'
-        )
-      )
-      .then(() => {
-        setKatexReady(true);
-      });
-  }, []);
-
-  // Format math inside HintCard and FightMode dynamically
-  useEffect(() => {
-    if (!katexReady || !mathContainerRef.current) return;
-
-    const renderMath = () => {
-      if (!mathContainerRef.current || !window.renderMathInElement) return;
-      try {
-        window.renderMathInElement(mathContainerRef.current, {
-          delimiters: [
-            { left: '$$', right: '$$', display: true },
-            { left: '$', right: '$', display: false },
-            { left: '\\[', right: '\\]', display: true },
-            { left: '\\(', right: '\\)', display: false },
-          ],
-          throwOnError: false,
-        });
-      } catch {
-        // Fallback gracefully
-      }
-    };
-
-    renderMath();
-
-    let timeoutId: ReturnType<typeof setTimeout>;
-    let isRendering = false;
-
-    const observer = new MutationObserver(() => {
-      if (isRendering) return;
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        if (!mathContainerRef.current) return;
-        isRendering = true;
-        observer.disconnect();
-        renderMath();
-        if (mathContainerRef.current) {
-          observer.observe(mathContainerRef.current, { childList: true, subtree: true });
-        }
-        isRendering = false;
-      }, 50);
-    });
-
-    observer.observe(mathContainerRef.current, { childList: true, subtree: true });
-
-    return () => {
-      clearTimeout(timeoutId);
-      observer.disconnect();
-    };
-  }, [katexReady, geminiData]);
-
-  const tips = [
-    'Analyzing reference frames...',
-    'Scanning for constraint relations...',
-    'Checking sign conventions...',
-    'Looking for the trap...',
-  ];
-  const [tipIndex, setTipIndex] = useState(0);
-
-  const handleCaptureClick = () => {
-    if (!hasValidApiKey()) {
-      onRequestSettings?.();
-      return;
-    }
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await handleIncomingImageFile(file);
-  };
-
-  const handleSubmitForAnalysis = async () => {
-    if (!pendingImage) return;
-
-    try {
-      setIsProcessing(true);
-      setError(null);
-      setGeminiData(null);
-      setImage(pendingImage);
-
-      const tipInterval = setInterval(() => {
-        setTipIndex((prev) => (prev + 1) % tips.length);
-      }, 1500);
-
-      const lengthInstructions = {
-        small: 'Keep hints and explanations extremely concise, bite-sized, and quick to read (1-2 punchy lines per step).',
-        medium: 'Provide a balanced, standard step-by-step guidance with clear milestones.',
-        long: 'Provide a comprehensive, in-depth breakdown exploring the underlying principles, edge cases, and alternate approaches.',
-      };
-
-      const formattingDirective = `[Formatting & Tone Directive: Detail Level = "${responseLength.toUpperCase()}" (${lengthInstructions[responseLength]}). Make the explanation visually dynamic and vibrant by incorporating contextual emojis (e.g., 💡, ⚡, 🎯, ⚠️, 🚀, 🧠, 🔍) in headings, key observations, and steps. Avoid dry text, but preserve standard LaTeX delimiters ($...$ and $$...$$) for all math.]`;
-
-      const promptPayload = userNote.trim()
-        ? `${userNote.trim()}\n\n${formattingDirective}`
-        : formattingDirective;
-
-      const data = await analyzeImage(pendingImage, promptPayload);
-      setGeminiData(data);
-
-      clearInterval(tipInterval);
-    } catch (err: any) {
-      setError(err.message || 'Failed to process image.');
+      setAnalysisResult(result);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error generating solution';
+      setError(
+        `${msg}. If ${AI_MODELS[selectedModel].name} is experiencing spikes, switch to another model above.`
+      );
     } finally {
-      setIsProcessing(false);
-      setPendingImage(null);
+      setLoading(false);
     }
   };
 
   const handleReset = () => {
-    setPendingImage(null);
-    setUserNote('');
-    setImage(null);
-    setGeminiData(null);
+    setAnalysisResult(null);
+    setSelectedImage(null);
+    setDoubtText('');
     setError(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    setSeconds(0);
+    setIsTimerRunning(false);
   };
 
   return (
-    <div ref={mathContainerRef} className="flex flex-col gap-6">
-      {!pendingImage && !image && (
-        <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-          <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center mb-6">
-            <Camera className="w-10 h-10 text-white" />
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">Log a Tricky Problem</h2>
-          <p className="text-zinc-400 mb-8 max-w-sm">
-            Snap a photo, choose an image, or paste a screenshot (<kbd className="px-1.5 py-0.5 bg-zinc-800 rounded border border-zinc-700 text-xs text-zinc-300 font-mono">Ctrl+V</kbd>).
+    <div className="p-6 max-w-5xl mx-auto space-y-6 text-zinc-100" onPaste={handlePaste}>
+      {/* Top Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-zinc-800">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+            <span>Fight Mode</span>
+            <span className="text-xs px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 uppercase font-semibold">
+              Live Arena
+            </span>
+          </h1>
+          <p className="text-sm text-zinc-400">
+            Tackle difficult doubts and exam questions with step-by-step guidance
           </p>
-
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <button
-              onClick={handleCaptureClick}
-              className="bg-white hover:bg-zinc-200 text-black font-semibold py-3 px-6 rounded-full shadow-lg transition-all active:scale-95 flex items-center gap-2"
-            >
-              <Camera className="w-5 h-5" />
-              Capture / Upload
-            </button>
-
-            <button
-              onClick={handlePasteClick}
-              className="bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700 font-medium py-3 px-6 rounded-full transition-all active:scale-95 flex items-center gap-2"
-            >
-              <Clipboard className="w-4 h-4 text-zinc-400" />
-              Paste Screenshot
-            </button>
-          </div>
-
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            className="hidden"
-          />
         </div>
-      )}
 
-      {pendingImage && !isProcessing && (
-        <div className="flex flex-col gap-4">
-          <div className="relative aspect-video rounded-xl overflow-hidden bg-black border border-zinc-800">
-            <img src={pendingImage} alt="Selected problem" className="w-full h-full object-contain" />
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-                Anything specific you got stuck on? <span className="text-zinc-600">(optional)</span>
-              </label>
-              <textarea
-                value={userNote}
-                onChange={(e) => setUserNote(e.target.value)}
-                placeholder="e.g. I couldn't figure out which direction the friction acts in step 2..."
-                rows={3}
-                className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors resize-none"
-              />
-            </div>
-
-            {/* Response Depth & Visual Style Selector */}
-            <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5 flex items-center justify-between">
-                <span>Explanation Depth</span>
-                <span className="text-[11px] text-zinc-500 font-normal">Includes expressive emojis ✨</span>
-              </label>
-              <select
-                value={responseLength}
-                onChange={(e) => setResponseLength(e.target.value as 'small' | 'medium' | 'long')}
-                className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-white transition-colors cursor-pointer"
-              >
-                <option value="small">⚡ Small — Punchy & Quick hints</option>
-                <option value="medium">🎯 Medium — Balanced step-by-step guidance</option>
-                <option value="long">🧠 Long — Comprehensive deep-dive & edge cases</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-1">
+        {/* Controls: Timer & Model Switcher */}
+        <div className="flex items-center gap-3">
+          {/* Practice Timer */}
+          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg text-xs font-mono">
+            <span className="text-zinc-400">⏱ {formatTime(seconds)}</span>
             <button
-              onClick={handleReset}
-              className="flex-1 py-2.5 rounded-lg border border-zinc-800 text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+              onClick={() => setIsTimerRunning(!isTimerRunning)}
+              className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300"
             >
-              Cancel
+              {isTimerRunning ? 'Pause' : 'Start'}
             </button>
             <button
-              onClick={handleSubmitForAnalysis}
-              className="flex-1 py-2.5 rounded-lg bg-white text-black text-sm font-semibold hover:bg-zinc-200 transition-colors flex items-center justify-center gap-1.5"
+              onClick={() => {
+                setIsTimerRunning(false);
+                setSeconds(0);
+              }}
+              className="text-[11px] text-zinc-500 hover:text-zinc-300"
             >
-              <Send className="w-4 h-4" />
-              Analyze
+              Reset
             </button>
+          </div>
+
+          {/* Model Switcher */}
+          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <select
+              value={selectedModel}
+              onChange={handleModelChange}
+              className="bg-transparent text-xs font-medium text-white focus:outline-none cursor-pointer"
+            >
+              {Object.entries(AI_MODELS).map(([key, model]) => (
+                <option key={key} value={key} className="bg-zinc-900 text-white">
+                  {model.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
-      )}
+      </div>
 
-      {image && !geminiData && isProcessing && (
-        <div className="flex flex-col gap-6 animate-pulse">
-          <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800">
-            <img src={image} alt="Problem thumbnail" className="w-full h-full object-cover opacity-50 blur-sm" />
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <Loader2 className="w-10 h-10 text-white animate-spin mb-4" />
-              <p className="text-zinc-300 font-medium">{tips[tipIndex]}</p>
-            </div>
-          </div>
-          <div className="h-40 bg-zinc-900/50 rounded-xl border border-zinc-800"></div>
-          <div className="h-16 bg-zinc-900/50 rounded-xl border border-zinc-800"></div>
-        </div>
-      )}
-
+      {/* Traffic Notice */}
       {error && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-center">
-          <p className="text-zinc-300 mb-4">{error}</p>
+        <div className="p-4 bg-amber-950/40 border border-amber-800/60 rounded-xl text-amber-200 text-sm flex items-start justify-between gap-3">
+          <div>
+            <p className="font-semibold text-amber-100">Notice</p>
+            <p className="mt-0.5 text-xs text-amber-300/90">{error}</p>
+          </div>
           <button
-            onClick={handleReset}
-            className="text-white hover:text-zinc-300 text-sm font-medium underline"
+            onClick={() => setError(null)}
+            className="text-xs text-amber-400 hover:text-amber-200 font-bold px-2 py-1"
           >
-            Try again
+            Dismiss
           </button>
         </div>
       )}
 
-      {geminiData && image && (
-        <div className="flex flex-col gap-6 fade-in">
-          <div className="relative aspect-video rounded-xl overflow-hidden bg-black border border-zinc-800 shadow-xl">
-            <img src={image} alt="Problem thumbnail" className="w-full h-full object-contain" />
-            <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm rounded-md px-3 py-1 text-xs font-semibold border border-zinc-800 flex items-center gap-2">
-              <span className="text-white uppercase tracking-wider">
-                {geminiData.subject}
-              </span>
-              <span className="text-zinc-600">•</span>
-              <span className="text-zinc-400">{geminiData.chapter}</span>
-            </div>
+      {/* Input Arena (Direct Ask Bar + Optional Image) */}
+      {!analysisResult ? (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4 shadow-xl">
+          <div className="flex items-center justify-between pb-2">
+            <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">
+              Submit Problem or Concept Doubt
+            </h2>
+            <span className="text-xs text-zinc-500">
+              Paste screenshot anytime (Ctrl+V)
+            </span>
           </div>
 
-          <HintCard data={geminiData} image={image} onReset={handleReset} />
+          {/* Direct Text Ask Bar */}
+          <div className="relative">
+            <textarea
+              rows={4}
+              value={doubtText}
+              onChange={(e) => setDoubtText(e.target.value)}
+              placeholder="Direct Ask: Type your question, physics formula, math problem, or specific conceptual doubt here... (e.g., 'Why does entropy increase in an isolated system during irreversible expansion?')"
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none font-sans leading-relaxed"
+            />
+          </div>
+
+          {/* Image Preview if attached */}
+          {selectedImage && (
+            <div className="relative inline-block border border-zinc-700 rounded-lg overflow-hidden bg-black max-w-xs">
+              <img
+                src={selectedImage}
+                alt="Problem preview"
+                className="max-h-48 object-contain"
+              />
+              <button
+                type="button"
+                onClick={() => setSelectedImage(null)}
+                className="absolute top-1.5 right-1.5 bg-zinc-900/80 hover:bg-rose-600 text-white rounded-full p-1 text-xs w-6 h-6 flex items-center justify-center transition"
+                title="Remove image"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Action Row */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 border border-zinc-700 rounded-xl text-xs font-medium flex items-center gap-2 transition"
+              >
+                <span>📷</span>
+                <span>{selectedImage ? 'Change Image' : 'Attach Screenshot'}</span>
+              </button>
+            </div>
+
+            <button
+              onClick={() => handleSubmit()}
+              disabled={loading || (!doubtText.trim() && !selectedImage)}
+              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition shadow-lg shadow-indigo-600/20 flex items-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Analyzing with {AI_MODELS[selectedModel].name}...</span>
+                </>
+              ) : (
+                <span>Solve Doubt →</span>
+              )}
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* HintCard & Result View */
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={handleReset}
+              className="text-xs text-zinc-400 hover:text-white flex items-center gap-1 transition"
+            >
+              ← Ask Another Question
+            </button>
+            <span className="text-xs text-zinc-500 font-mono">
+              Engine: {AI_MODELS[selectedModel].id}
+            </span>
+          </div>
+
+          <HintCard response={analysisResult} onReset={handleReset} />
         </div>
       )}
     </div>
