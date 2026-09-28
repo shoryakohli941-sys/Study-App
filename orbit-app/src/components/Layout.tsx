@@ -13,10 +13,10 @@ interface LayoutProps {
   children: React.ReactNode;
   activeTab: TabType;
   onTabChange: (tab: TabType) => void;
-  onSettingsClick: () => void;
+  onRequestSettings: () => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, onSettingsClick }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, onRequestSettings }) => {
   return (
     <div className="min-h-screen bg-black text-white flex flex-col font-sans">
       <header className="fixed top-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-md border-b border-zinc-900">
@@ -30,7 +30,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
             </h1>
           </div>
           <button
-            onClick={onSettingsClick}
+            onClick={onRequestSettings}
             className="p-2 rounded-full hover:bg-zinc-900 transition-colors"
             aria-label="Settings"
           >
