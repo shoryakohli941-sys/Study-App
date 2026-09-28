@@ -90,7 +90,7 @@ export const analyzeImage = async (base64Image: string, userNote?: string): Prom
   let response;
   try {
     response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
+      model: 'gemini-3.5-flash-lite',
       contents: [
         {
           role: 'user',
