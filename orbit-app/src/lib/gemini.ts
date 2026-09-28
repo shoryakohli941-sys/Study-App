@@ -25,15 +25,15 @@ export const AI_MODELS = {
     badge: 'Lightweight · Zero Spike',
     description: 'Ultra-lightweight endpoint with maximum RPM quota on the free tier',
   },
-  'gemini-2.5-flash': {
-    id: 'gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
+  'gemini-3.6-flash': {
+    id: 'gemini-3.6-flash',
+    name: 'Gemini 3.6 Flash',
     badge: 'Reliable · Free Tier',
     description: 'Stable price-to-performance ratio for consistent background prompts',
   },
-  'gemini-2.0-flash': {
-    id: 'gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash',
+  'gemini-3.5-flash': {
+    id: 'gemini-3.5-flash',
+    name: 'Gemini 3.5 Flash',
     badge: 'High Stability · Universal',
     description: 'Battle-tested fallback with steady rate limits and minimal latency',
   },
