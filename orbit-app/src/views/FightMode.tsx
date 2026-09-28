@@ -10,6 +10,7 @@ import {
   type GeminiResponse,
 } from '../lib/gemini';
 import { HintCard } from '../components/HintCard';
+import { processImage } from '../lib/image';
 
 export const FightMode: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState<AIModelKey>(getSavedAIModel());
@@ -51,29 +52,31 @@ export const FightMode: React.FC = () => {
     setError(null);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const dataUrl = await processImage(file);
+        setSelectedImage(dataUrl);
+      } catch {
+        setError("Failed to process uploaded image.");
+      }
     }
   };
 
-  const handlePaste = (e: React.ClipboardEvent) => {
+  const handlePaste = async (e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (items) {
       for (let i = 0; i < items.length; i++) {
         if (items[i].type.startsWith('image/')) {
           const file = items[i].getAsFile();
           if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              setSelectedImage(reader.result as string);
-            };
-            reader.readAsDataURL(file);
+            try {
+              const dataUrl = await processImage(file);
+              setSelectedImage(dataUrl);
+            } catch {
+              setError("Failed to process pasted image.");
+            }
           }
           break;
         }
@@ -246,6 +249,7 @@ export const FightMode: React.FC = () => {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                capture="environment"
                 onChange={handleImageUpload}
                 className="hidden"
               />
@@ -290,7 +294,7 @@ export const FightMode: React.FC = () => {
             </span>
           </div>
 
-          <HintCard response={analysisResult} onReset={handleReset} />
+          <HintCard response={analysisResult} onReset={handleReset} imageUrl={selectedImage} />
         </div>
       )}
     </div>
