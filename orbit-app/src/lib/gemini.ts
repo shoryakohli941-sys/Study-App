@@ -1,11 +1,11 @@
-// Global polyfill for NodeJS.Timeout in Vite browser environments
+// Polyfill NodeJS namespace for Vite browser environments
 declare global {
   namespace NodeJS {
     type Timeout = any;
   }
 }
 
-// Handpicked credit-efficient, high-speed Flash models from Google AI Studio
+// Handpicked credit-efficient Flash models from Google AI Studio
 export const AI_MODELS = {
   'gemini-3.8-flash': {
     id: 'gemini-3.8-flash',
@@ -27,17 +27,21 @@ export const DEFAULT_AI_MODEL: AIModelKey = 'gemini-3.8-flash';
 const MODEL_STORAGE_KEY = 'orbit_selected_ai_model';
 const API_KEY_STORAGE = 'orbit_gemini_api_key';
 
+// Strictly typed without optional 'undefined' to satisfy strictNullChecks in HintCard
 export interface GeminiResponse {
-  answer?: string;
-  solution?: string;
-  explanation?: string;
-  hints?: string[];
-  steps?: string[];
-  topic?: string;
-  subtopic?: string;
-  difficulty?: string;
-  concepts?: string[];
-  rawText?: string;
+  answer: string;
+  solution: string;
+  explanation: string;
+  hints: string[];
+  steps: string[];
+  topic: string;
+  subtopic: string;
+  difficulty: string;
+  concepts: string[];
+  rawText: string;
+  question: string;
+  title: string;
+  keyFormula: string;
   [key: string]: any;
 }
 
@@ -200,19 +204,35 @@ export async function analyzeImage(
     solution: text,
     explanation: text,
     hints: [text],
-    steps: [],
+    steps: [text],
+    topic: 'General',
+    subtopic: 'General',
+    difficulty: 'Medium',
+    concepts: [],
     rawText: text,
+    question: '',
+    title: '',
+    keyFormula: '',
   };
 
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const jsonParsed = JSON.parse(jsonMatch[0]);
-      parsed = { ...parsed, ...jsonParsed };
+      parsed = {
+        ...parsed,
+        ...jsonParsed,
+        hints: Array.isArray(jsonParsed.hints)
+          ? jsonParsed.hints
+          : [jsonParsed.hints || text],
+        steps: Array.isArray(jsonParsed.steps)
+          ? jsonParsed.steps
+          : [jsonParsed.steps || text],
+      };
     }
   } catch {
-    // Retain plain text fallback
+    // Keep fallback plain-text structure
   }
 
   return parsed;
-}      
+}
