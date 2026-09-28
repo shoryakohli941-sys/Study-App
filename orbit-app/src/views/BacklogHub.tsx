@@ -1,386 +1,354 @@
-import React, { useState, useEffect } from 'react';
-import {
-  AI_MODELS,
-  type AIModelKey,
-  getSavedAIModel,
-  saveAIModel,
-  generateStudyPlan,
-} from '../lib/gemini';
+import React, { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db';
+import { BACKLOG_CHAPTERS, PLAYLIST_LINKS } from '../data/manzilPlaylists';
+import type { Chapter } from '../data/manzilPlaylists';
+import { PlayCircle, CheckCircle2, Circle, ExternalLink, Plus, X, Clock } from 'lucide-react';
 
-interface BacklogItem {
-  id: string;
-  topic: string;
+const SUBJECTS = ['All', 'Physics', 'Mathematics', 'Physical Chemistry', 'Organic Chemistry', 'Inorganic Chemistry'];
+
+interface SubjectGroup {
   subject: string;
-  priority: 'High' | 'Medium' | 'Low';
-  hours: number;
-  completed: boolean;
-  roadmap?: string;
+  lectures: Chapter[];
 }
 
 export const BacklogHub: React.FC = () => {
-  const [selectedModel, setSelectedModel] = useState<AIModelKey>(getSavedAIModel());
-  const [backlogs, setBacklogs] = useState<BacklogItem[]>(() => {
-    try {
-      const stored = localStorage.getItem('orbit_backlogs');
-      return stored
-        ? JSON.parse(stored)
-        : [
-            {
-              id: '1',
-              topic: 'Rotational Dynamics & Moment of Inertia',
-              subject: 'Physics',
-              priority: 'High',
-              hours: 6,
-              completed: false,
-            },
-            {
-              id: '2',
-              topic: 'Chemical Equilibrium & Le Chatelier',
-              subject: 'Chemistry',
-              priority: 'Medium',
-              hours: 4,
-              completed: false,
-            },
-          ];
-    } catch {
-      return [];
-    }
-  });
+  const [activeFilter, setActiveFilter] = useState<string>('All');
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [addSubject, setAddSubject] = useState<string>('Physics');
+  const [addChapter, setAddChapter] = useState<string>('');
+  const [addUrl, setAddUrl] = useState<string>('');
 
-  const [newTopic, setNewTopic] = useState('');
-  const [newSubject, setNewSubject] = useState('Physics');
-  const [newPriority, setNewPriority] = useState<'High' | 'Medium' | 'Low'>('High');
-  const [newHours, setNewHours] = useState(4);
-  const [activePlanId, setActivePlanId] = useState<string | null>(null);
-  const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Load lecture progress and custom lectures from Dexie
+  const progressLogs = useLiveQuery(() => db.lectureProgress.toArray()) || [];
+  const customLectures = useLiveQuery(() => db.customLectures.toArray()) || [];
 
-  useEffect(() => {
-    localStorage.setItem('orbit_backlogs', JSON.stringify(backlogs));
-  }, [backlogs]);
-
-  const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const nextModel = e.target.value as AIModelKey;
-    setSelectedModel(nextModel);
-    saveAIModel(nextModel);
-    setErrorMessage(null);
-  };
-
-  const handleAddBacklog = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTopic.trim()) return;
-
-    const newItem: BacklogItem = {
-      id: Date.now().toString(),
-      topic: newTopic.trim(),
-      subject: newSubject,
-      priority: newPriority,
-      hours: Number(newHours) || 3,
-      completed: false,
-    };
-
-    setBacklogs((prev) => [newItem, ...prev]);
-    setNewTopic('');
-  };
-
-  const handleToggleComplete = (id: string) => {
-    setBacklogs((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, completed: !item.completed } : item
-      )
-    );
-  };
-
-  const handleDeleteItem = (id: string) => {
-    setBacklogs((prev) => prev.filter((item) => item.id !== id));
-    if (activePlanId === id) setActivePlanId(null);
-  };
-
-  const handleGeneratePlan = async (item: BacklogItem) => {
-    setLoadingId(item.id);
-    setErrorMessage(null);
-
-    try {
-      const plan = await generateStudyPlan(item.topic, item.subject, selectedModel);
-      setBacklogs((prev) =>
-        prev.map((b) => (b.id === item.id ? { ...b, roadmap: plan } : b))
-      );
-      setActivePlanId(item.id);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Generation failed';
-      setErrorMessage(
-        `${msg}. If ${AI_MODELS[selectedModel].name} is experiencing spikes, switch to another model from the dropdown above.`
-      );
-    } finally {
-      setLoadingId(null);
+  const toggleLecture = async (lectureId: string, subject: string) => {
+    const existing = progressLogs.find(p => p.videoId === lectureId);
+    if (existing) {
+      await db.lectureProgress.update(existing.id!, {
+        completed: !existing.completed,
+        updatedAt: Date.now()
+      });
+    } else {
+      await db.lectureProgress.add({
+        videoId: lectureId,
+        completed: true,
+        subject: subject,
+        updatedAt: Date.now()
+      });
     }
   };
 
-  const activeBacklog = backlogs.find((b) => b.id === activePlanId);
+  const getProgressForSubject = (subject: string, lectures: Chapter[]) => {
+    const customForSubject = customLectures.filter(c => c.subject === subject);
+    const total = lectures.length + customForSubject.length;
+    if (total === 0) return { completed: 0, total: 0, percent: 0 };
+
+    let completed = 0;
+    lectures.forEach(l => {
+      const log = progressLogs.find(p => p.videoId === l.id);
+      if (log && log.completed) completed++;
+    });
+    customForSubject.forEach(c => {
+       const log = progressLogs.find(p => p.videoId === `custom_${c.id}`);
+       if (log && log.completed) completed++;
+    });
+
+    return { completed, total, percent: Math.round((completed / total) * 100) };
+  };
+
+  // Group lectures by subject
+  const subjectGroups: SubjectGroup[] = SUBJECTS.filter(s => s !== 'All').map(subject => ({
+    subject,
+    lectures: BACKLOG_CHAPTERS.filter(c => c.subject === subject)
+  }));
+
+  // Filter the subjects to show
+  const displayGroups = activeFilter === 'All'
+    ? subjectGroups
+    : subjectGroups.filter(g => g.subject === activeFilter);
+
+  const handleAddCustomLecture = async () => {
+    if (!addChapter.trim() || !addUrl.trim()) return;
+
+    const match = addUrl.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
+    const videoId = match ? match[1] : '';
+
+    if (!videoId) {
+      alert('Invalid YouTube URL or Video ID');
+      return;
+    }
+
+    await db.customLectures.add({
+      subject: addSubject,
+      chapter: addChapter.trim(),
+      videoId,
+      createdAt: Date.now()
+    });
+
+    setAddChapter('');
+    setAddUrl('');
+    setIsAddModalOpen(false);
+  };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 text-zinc-100">
-      {/* Top Header & AI Model Switcher */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-zinc-800">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Backlog Hub</h1>
-          <p className="text-sm text-zinc-400">
-            Audit, decompose, and clear pending syllabus backlogs
-          </p>
-        </div>
-
-        {/* Dynamic Model Dropdown */}
-        <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 px-3.5 py-2 rounded-xl shadow-sm">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <label
-              htmlFor="ai-model-select"
-              className="text-xs font-semibold text-zinc-400 uppercase tracking-wider"
-            >
-              AI Engine:
-            </label>
-          </div>
-
-          <select
-            id="ai-model-select"
-            value={selectedModel}
-            onChange={handleModelChange}
-            className="bg-zinc-800 hover:bg-zinc-750 text-xs font-medium text-white px-2.5 py-1.5 rounded-lg border border-zinc-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
-          >
-            {Object.entries(AI_MODELS).map(([key, model]) => (
-              <option key={key} value={key} className="bg-zinc-900 text-white">
-                {model.name} — {model.badge}
-              </option>
-            ))}
-          </select>
-        </div>
+    <div className="flex flex-col gap-6 h-full pb-8">
+      <div className="flex flex-col gap-2 relative">
+        <h2 className="text-2xl font-black tracking-tighter text-white uppercase">Manzil Backlog Hub</h2>
+        <p className="text-zinc-400 text-sm tracking-wide">Track your one-shot lectures directly from the official PW Manzil series.</p>
+        <button
+          onClick={() => setIsAddModalOpen(true)}
+          className="absolute top-0 right-0 bg-white text-black text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-transform"
+        >
+          <Plus className="w-3.5 h-3.5" /> Add Lecture
+        </button>
       </div>
 
-      {/* Traffic Spike Notice */}
-      {errorMessage && (
-        <div className="p-4 bg-amber-950/40 border border-amber-800/60 rounded-xl text-amber-200 text-sm flex items-start justify-between gap-3">
-          <div>
-            <p className="font-semibold text-amber-100">AI Request Notice</p>
-            <p className="mt-0.5 text-xs text-amber-300/90">{errorMessage}</p>
-          </div>
+      {/* Filters */}
+      <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-2 -mx-4 px-4 snap-x">
+        {SUBJECTS.map(filter => (
           <button
-            onClick={() => setErrorMessage(null)}
-            className="text-xs text-amber-400 hover:text-amber-200 font-bold px-2 py-1"
+            key={filter}
+            onClick={() => setActiveFilter(filter)}
+            className={`snap-start whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-colors border ${
+              activeFilter === filter
+                ? 'bg-white text-black border-white'
+                : 'bg-black text-zinc-400 border-zinc-800 hover:text-white hover:bg-zinc-900'
+            }`}
           >
-            Dismiss
+            {filter}
           </button>
-        </div>
-      )}
+        ))}
+      </div>
 
-      {/* Main Grid: Form + List & Roadmap */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Input Form & Backlog List */}
-        <div className="lg:col-span-7 space-y-6">
-          <form
-            onSubmit={handleAddBacklog}
-            className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-5 space-y-4 shadow-sm"
-          >
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
-              Log Unfinished Topic
-            </h2>
+      <div className="space-y-8">
+        {displayGroups.map(group => {
+          const stats = getProgressForSubject(group.subject, group.lectures);
+          const customForSubject = customLectures.filter(c => c.subject === group.subject);
+          const playlistUrl = PLAYLIST_LINKS[group.subject] || '#';
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-2">
+          return (
+            <div key={group.subject} className="bg-black border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
+              {/* Subject Header & Progress */}
+              <div className="p-5 border-b border-zinc-800 bg-zinc-950">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-black text-lg text-white uppercase tracking-tight">{group.subject} Backlog</h3>
+                  <span className="text-xs font-bold font-mono text-zinc-400 bg-zinc-900 px-2 py-1 rounded">
+                    {stats.completed}/{stats.total} • {stats.percent}%
+                  </span>
+                </div>
+
+                <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden mb-4">
+                  <div
+                    className="h-full bg-white transition-all duration-500 ease-out"
+                    style={{ width: `${stats.percent}%` }}
+                  />
+                </div>
+
+                <a
+                  href={playlistUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-white rounded-md text-xs font-bold uppercase tracking-widest transition-colors"
+                >
+                  <PlayCircle className="w-4 h-4" />
+                  Open Official Playlist ({group.lectures.length} Lectures) <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+
+              {/* Lecture Cards */}
+              <div className="divide-y divide-zinc-900 bg-black">
+                {group.lectures.map((lecture, index) => {
+                  const log = progressLogs.find(p => p.videoId === lecture.id);
+                  const isCompleted = log ? log.completed : false;
+
+                  return (
+                    <div key={lecture.id} className={`p-4 flex gap-4 transition-colors ${isCompleted ? 'bg-zinc-950/50' : 'hover:bg-zinc-950'}`}>
+                      {/* Thumbnail */}
+                      <div className="w-32 h-20 shrink-0 bg-zinc-900 border border-zinc-800 rounded relative overflow-hidden flex items-center justify-center group">
+                        {lecture.videoId && (
+                          <img
+                            src={`https://img.youtube.com/vi/${lecture.videoId}/hqdefault.jpg`}
+                            className="w-full h-full object-cover relative z-10 group-hover:scale-105 transition-transform"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            alt={lecture.chapter}
+                          />
+                        )}
+                        <PlayCircle className="w-6 h-6 text-zinc-700 absolute z-0" />
+                        <span className="text-zinc-700 font-black text-3xl opacity-20 absolute -right-1 -bottom-2 pointer-events-none z-0">
+                          {String(index + 1).padStart(2, '0')}
+                        </span>
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 flex flex-col justify-between py-0.5">
+                        <div>
+                          <h4 className={`font-semibold text-sm leading-tight transition-colors ${isCompleted ? 'text-zinc-500 line-through' : 'text-white'}`}>
+                            {lecture.chapter}
+                          </h4>
+                          <div className="text-xs font-mono text-zinc-500 flex items-center gap-1.5 mt-1">
+                            <Clock className="w-3 h-3" /> {lecture.duration}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between mt-2">
+                          <a
+                            href={lecture.videoId ? `https://youtu.be/${lecture.videoId}` : playlistUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-zinc-400 hover:text-white font-bold uppercase tracking-wider flex items-center gap-1"
+                          >
+                            Watch <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+
+                          <button
+                            onClick={() => toggleLecture(lecture.id, group.subject)}
+                            className="flex items-center justify-center min-w-[44px] min-h-[44px] -m-2"
+                            aria-label="Toggle completion"
+                          >
+                            {isCompleted ? (
+                              <CheckCircle2 className="w-6 h-6 text-white" />
+                            ) : (
+                              <Circle className="w-6 h-6 text-zinc-600" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Custom Lectures */}
+                {customForSubject.map((custom, index) => {
+                  const logId = `custom_${custom.id}`;
+                  const log = progressLogs.find(p => p.videoId === logId);
+                  const isCompleted = log ? log.completed : false;
+
+                  return (
+                    <div key={`custom-${custom.id}`} className={`p-4 flex gap-4 transition-colors ${isCompleted ? 'bg-zinc-950/50' : 'hover:bg-zinc-950'}`}>
+                      <div className="w-32 h-20 shrink-0 bg-zinc-900 border border-zinc-800 rounded relative overflow-hidden flex items-center justify-center group">
+                        <img
+                          src={`https://img.youtube.com/vi/${custom.videoId}/hqdefault.jpg`}
+                          className="w-full h-full object-cover relative z-10 group-hover:scale-105 transition-transform"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          alt={custom.chapter}
+                        />
+                        <PlayCircle className="w-6 h-6 text-zinc-700 absolute z-0" />
+                        <span className="text-zinc-700 font-black text-3xl opacity-20 absolute -right-1 -bottom-2 pointer-events-none z-0">
+                          C{String(index + 1).padStart(2, '0')}
+                        </span>
+                      </div>
+
+                      <div className="flex-1 flex flex-col justify-between py-0.5">
+                        <div>
+                           <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Custom Entry</span>
+                           <h4 className={`font-semibold text-sm leading-tight transition-colors ${isCompleted ? 'text-zinc-500 line-through' : 'text-white'}`}>
+                             {custom.chapter}
+                           </h4>
+                           <div className="text-xs font-mono text-zinc-500 flex items-center gap-1.5 mt-1">
+                            <Clock className="w-3 h-3" /> Custom
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between mt-2">
+                          <a
+                            href={`https://youtu.be/${custom.videoId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-zinc-400 hover:text-white font-bold uppercase tracking-wider flex items-center gap-1"
+                          >
+                            Watch <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+
+                          <button
+                            onClick={() => toggleLecture(logId, group.subject)}
+                            className="flex items-center justify-center min-w-[44px] min-h-[44px] -m-2"
+                            aria-label="Toggle completion"
+                          >
+                            {isCompleted ? (
+                              <CheckCircle2 className="w-6 h-6 text-white" />
+                            ) : (
+                              <Circle className="w-6 h-6 text-zinc-600" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Add Custom Lecture Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-950 border border-zinc-800 w-full max-w-sm rounded-xl overflow-hidden shadow-2xl flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b border-zinc-800">
+              <h3 className="text-white font-bold tracking-tight">Add Custom Lecture</h3>
+              <button onClick={() => setIsAddModalOpen(false)} className="text-zinc-500 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 flex flex-col gap-4">
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Subject</label>
+                <select
+                  value={addSubject}
+                  onChange={(e) => setAddSubject(e.target.value)}
+                  className="w-full bg-black border border-zinc-800 rounded-md py-2 px-3 text-sm text-white focus:outline-none focus:border-zinc-500"
+                >
+                  {SUBJECTS.filter(s => s !== 'All').map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Chapter Name</label>
                 <input
                   type="text"
-                  placeholder="Chapter or Topic name..."
-                  value={newTopic}
-                  onChange={(e) => setNewTopic(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
+                  value={addChapter}
+                  onChange={(e) => setAddChapter(e.target.value)}
+                  placeholder="e.g. Thermodynamics 02"
+                  className="w-full bg-black border border-zinc-800 rounded-md py-2 px-3 text-sm text-white focus:outline-none focus:border-zinc-500"
                 />
               </div>
 
               <div>
-                <select
-                  value={newSubject}
-                  onChange={(e) => setNewSubject(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="Physics">Physics</option>
-                  <option value="Chemistry">Chemistry</option>
-                  <option value="Mathematics">Mathematics</option>
-                  <option value="Biology">Biology</option>
-                </select>
+                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">YouTube URL or Video ID</label>
+                <input
+                  type="text"
+                  value={addUrl}
+                  onChange={(e) => setAddUrl(e.target.value)}
+                  placeholder="e.g. https://youtu.be/dQw4w9WgXcQ"
+                  className="w-full bg-black border border-zinc-800 rounded-md py-2 px-3 text-sm text-white focus:outline-none focus:border-zinc-500"
+                />
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5 text-xs text-zinc-400">
-                  <span>Priority:</span>
-                  <select
-                    value={newPriority}
-                    onChange={(e) =>
-                      setNewPriority(e.target.value as 'High' | 'Medium' | 'Low')
-                    }
-                    className="bg-zinc-950 border border-zinc-800 rounded-md px-2 py-1 text-xs text-white focus:outline-none"
-                  >
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-1.5 text-xs text-zinc-400">
-                  <span>Est. Hours:</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="40"
-                    value={newHours}
-                    onChange={(e) => setNewHours(Number(e.target.value))}
-                    className="w-14 bg-zinc-950 border border-zinc-800 rounded-md px-2 py-1 text-xs text-white focus:outline-none"
-                  />
-                </div>
-              </div>
-
+            <div className="p-4 border-t border-zinc-800 flex gap-2">
               <button
-                type="submit"
-                className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition"
+                onClick={() => setIsAddModalOpen(false)}
+                className="flex-1 py-2 rounded-md font-bold text-xs uppercase tracking-wider text-zinc-400 hover:text-white transition-colors"
               >
-                + Add to Backlog
+                Cancel
+              </button>
+              <button
+                onClick={handleAddCustomLecture}
+                disabled={!addChapter.trim() || !addUrl.trim()}
+                className="flex-1 py-2 rounded-md font-bold text-xs uppercase tracking-wider bg-white text-black disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-200 transition-colors"
+              >
+                Save
               </button>
             </div>
-          </form>
-
-          {/* List of Backlogs */}
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
-              Active Queue ({backlogs.filter((b) => !b.completed).length})
-            </h2>
-
-            {backlogs.length === 0 ? (
-              <div className="p-8 text-center bg-zinc-900/50 border border-zinc-800/80 rounded-xl text-zinc-500 text-sm">
-                No backlogs recorded. You're completely caught up!
-              </div>
-            ) : (
-              backlogs.map((item) => (
-                <div
-                  key={item.id}
-                  className={`p-4 rounded-xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                    item.completed
-                      ? 'bg-zinc-950/60 border-zinc-900 opacity-60'
-                      : 'bg-zinc-900 border-zinc-800'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={item.completed}
-                      onChange={() => handleToggleComplete(item.id)}
-                      className="mt-1 h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-indigo-600 focus:ring-0 cursor-pointer"
-                    />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-sm font-medium ${
-                            item.completed ? 'line-through text-zinc-500' : 'text-zinc-100'
-                          }`}
-                        >
-                          {item.topic}
-                        </span>
-                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                          {item.subject}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 mt-1 text-xs text-zinc-400">
-                        <span>
-                          Priority:{' '}
-                          <strong
-                            className={
-                              item.priority === 'High'
-                                ? 'text-rose-400'
-                                : item.priority === 'Medium'
-                                ? 'text-amber-400'
-                                : 'text-emerald-400'
-                            }
-                          >
-                            {item.priority}
-                          </strong>
-                        </span>
-                        <span>•</span>
-                        <span>{item.hours}h allotted</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 self-end sm:self-center">
-                    <button
-                      onClick={() => handleGeneratePlan(item)}
-                      disabled={loadingId === item.id}
-                      className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-indigo-300 border border-zinc-700 rounded-lg text-xs font-medium transition"
-                    >
-                      {loadingId === item.id
-                        ? 'Generating...'
-                        : item.roadmap
-                        ? 'Re-plan (AI)'
-                        : 'AI Plan'}
-                    </button>
-
-                    {item.roadmap && (
-                      <button
-                        onClick={() => setActivePlanId(item.id)}
-                        className="px-3 py-1.5 bg-indigo-950/60 hover:bg-indigo-900 text-indigo-300 border border-indigo-800/80 rounded-lg text-xs font-medium transition"
-                      >
-                        View Plan
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => handleDeleteItem(item.id)}
-                      className="text-zinc-500 hover:text-rose-400 p-1.5 text-xs transition"
-                      title="Delete item"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
           </div>
         </div>
-
-        {/* Right Column: Roadmap View */}
-        <div className="lg:col-span-5">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 sticky top-6 space-y-4 min-h-[400px]">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
-                Action Roadmap
-              </h2>
-              <span className="text-[11px] text-zinc-500 font-mono">
-                Model: {AI_MODELS[selectedModel].id}
-              </span>
-            </div>
-
-            {activeBacklog?.roadmap ? (
-              <div className="space-y-3">
-                <div className="pb-2 border-b border-zinc-800/80">
-                  <h3 className="text-base font-semibold text-white">
-                    {activeBacklog.topic}
-                  </h3>
-                  <p className="text-xs text-zinc-400">{activeBacklog.subject}</p>
-                </div>
-                <div className="text-xs leading-relaxed text-zinc-300 whitespace-pre-wrap font-sans">
-                  {activeBacklog.roadmap}
-                </div>
-              </div>
-            ) : (
-              <div className="h-64 flex flex-col items-center justify-center text-center text-zinc-500 text-xs px-4">
-                <p>No active roadmap selected.</p>
-                <p className="mt-1 text-zinc-600">
-                  Select any backlog item and click <strong>AI Plan</strong> to construct a strategy using {AI_MODELS[selectedModel].name}.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 };
