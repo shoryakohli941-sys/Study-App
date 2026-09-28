@@ -1,119 +1,83 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const STORAGE_KEY = 'orbit_gemini_api_key';
+// Handpicked credit-efficient, high-speed Flash models from Google AI Studio
+export const AI_MODELS = {
+  'gemini-3.8-flash': {
+    id: 'gemini-3.8-flash',
+    name: 'Gemini 3.8 Flash',
+    badge: 'Ultra Fast · Minimal Credits',
+    description: 'Fastest reasoning with lowest credit consumption',
+  },
+  'gemini-3.7-flash': {
+    id: 'gemini-3.7-flash',
+    name: 'Gemini 3.7 Flash',
+    badge: 'High Throughput · Balanced',
+    description: 'Balanced performance, low latency fallback during spikes',
+  },
+} as const;
 
-export const getApiKey = (): string => {
-  if (typeof window === 'undefined') return '';
-  const savedKey = localStorage.getItem(STORAGE_KEY);
-  if (savedKey && savedKey.trim().length > 0) {
-    return savedKey.trim();
+export type AIModelKey = keyof typeof AI_MODELS;
+export const DEFAULT_AI_MODEL: AIModelKey = 'gemini-3.8-flash';
+
+const MODEL_STORAGE_KEY = 'orbit_selected_ai_model';
+const API_KEY_STORAGE = 'orbit_gemini_api_key';
+
+export function getSavedAIModel(): AIModelKey {
+  try {
+    const saved = localStorage.getItem(MODEL_STORAGE_KEY) as AIModelKey;
+    if (saved && saved in AI_MODELS) {
+      return saved;
+    }
+  } catch {
+    // Ignore storage read errors
   }
-  const envKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (envKey && envKey.trim().length > 0) {
-    return envKey.trim();
-  }
-  return '';
-};
-
-export const setApiKey = (key: string): void => {
-  localStorage.setItem(STORAGE_KEY, key.trim());
-};
-
-export const clearApiKey = (): void => {
-  localStorage.removeItem(STORAGE_KEY);
-};
-
-export const hasValidApiKey = (): boolean => {
-  return getApiKey().length > 0;
-};
-
-export const getGeminiClient = (): GoogleGenAI => {
-  const key = getApiKey();
-  if (!key) {
-    throw new Error('API_KEY_MISSING');
-  }
-  return new GoogleGenAI({ apiKey: key });
-};
-
-/**
- * Shape returned by analyzeImage(), consumed by FightMode.tsx and HintCard.tsx.
- */
-export interface GeminiResponse {
-  subject: 'Physics' | 'Chemistry' | 'Mathematics';
-  chapter: string;
-  subtopic: string;
-  the_trap: string;
-  hint_1_lens: string;
-  hint_2_setup: string;
-  hint_3_pivot: string;
-  key_formula: string;
-  full_solution: string;
+  return DEFAULT_AI_MODEL;
 }
 
-const ANALYZE_PROMPT = `You are a Socratic JEE (Physics/Chemistry/Mathematics) mentor looking at a photo of a problem a student is stuck on.
-
-Identify the subject, chapter and subtopic, then produce a staged hint sequence that helps the student find the solution themselves without giving it away immediately.
-
-Respond with ONLY a raw JSON object (no markdown fences, no preamble) with exactly these keys:
-{
-  "subject": "Physics" | "Chemistry" | "Mathematics",
-  "chapter": string (the JEE chapter this problem belongs to),
-  "subtopic": string (specific concept/subtopic within the chapter),
-  "the_trap": string (the common mistake or misconception this problem is designed to catch),
-  "hint_1_lens": string (a gentle nudge toward the right way of looking at the problem, no numbers),
-  "hint_2_setup": string (how to set up the equations/approach, still without solving),
-  "hint_3_pivot": string (the key insight or step that unlocks the solution),
-  "key_formula": string (the core formula(s) needed),
-  "full_solution": string (the complete worked solution, step by step)
-}`;
-
-/**
- * Sends a base64-encoded image of a problem to Gemini and returns a
- * structured Socratic hint breakdown. Throws if the API key is missing
- * or the response can't be parsed as the expected JSON shape.
- */
-export const analyzeImage = async (base64Image: string, userNote?: string): Promise<GeminiResponse> => {
-  const ai = getGeminiClient();
-
-  const commaIndex = base64Image.indexOf(',');
-  const rawBase64 = base64Image.startsWith('data:') && commaIndex !== -1
-    ? base64Image.slice(commaIndex + 1)
-    : base64Image;
-  const mimeMatch = base64Image.match(/^data:(image\/[a-zA-Z+]+);base64,/);
-  const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-
-  const trimmedNote = userNote?.trim();
-  const promptText = trimmedNote
-    ? `${ANALYZE_PROMPT}\n\nThe student added this note about where they specifically got stuck - pay close attention to it and address it directly in your hints: "${trimmedNote}"`
-    : ANALYZE_PROMPT;
-
-  let response;
+export function saveAIModel(modelKey: AIModelKey): void {
   try {
-    response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash-lite',
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: promptText },
-            { inlineData: { mimeType, data: rawBase64 } }
-          ]
-        }
-      ]
-    });
-  } catch (err) {
-    console.error('Gemini request failed:', err);
-    throw new Error('Could not reach Gemini. Check your API key and connection.');
+    localStorage.setItem(MODEL_STORAGE_KEY, modelKey);
+  } catch {
+    // Ignore storage write errors
+  }
+}
+
+export function getApiKey(): string {
+  return (
+    localStorage.getItem(API_KEY_STORAGE) ||
+    (import.meta.env.VITE_GEMINI_API_KEY as string) ||
+    ''
+  );
+}
+
+export async function generateStudyPlan(
+  topic: string,
+  subject: string,
+  modelKey: AIModelKey = getSavedAIModel()
+): Promise<string> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error('Gemini API Key missing. Please provide your key in settings.');
   }
 
-  const text = response.text ?? '';
-  const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+  const selectedModelId = AI_MODELS[modelKey]?.id || AI_MODELS[DEFAULT_AI_MODEL].id;
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: selectedModelId });
 
-  try {
-    const parsed = JSON.parse(cleaned) as GeminiResponse;
-    return parsed;
-  } catch (err) {
-    console.error('Failed to parse Gemini response as JSON:', text);
-    throw new Error('Gemini returned an unexpected response. Please try again.');
-  }
-};
+  const prompt = `You are a high-yield study strategist for competitive exams.
+Break down this backlog topic into an actionable, prioritized roadmap:
+- Subject: ${subject}
+- Backlog Chapter/Topic: ${topic}
+
+Provide:
+1. Core Prerequisite concepts to review first (max 3 bullets).
+2. High-Yield Subtopics ranked by exam weightage.
+3. 3-Phase Study Plan (Theory -> Problem Solving -> Error Review).
+4. Estimated time required (in hours) and common pitfalls to avoid.
+
+Keep it concise, actionable, and formatted in clean Markdown.`;
+
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  return response.text();
+}
