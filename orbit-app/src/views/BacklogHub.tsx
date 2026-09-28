@@ -11,8 +11,7 @@ import {
   Search,
   Sparkles
 } from 'lucide-react';
-import { BACKLOG_CHAPTERS, PLAYLIST_LINKS } from '../data/manzilPlaylists';
-import type { Chapter } from '../data/manzilPlaylists';
+import { BACKLOG_CHAPTERS, PLAYLIST_LINKS, Chapter } from '../data/manzilPlaylists';
 import { db } from '../db';
 
 type SubjectFilter = 'All' | 'Physics' | 'Mathematics' | 'Physical Chemistry' | 'Organic Chemistry' | 'Inorganic Chemistry';
@@ -243,13 +242,13 @@ export const BacklogHub: React.FC = () => {
 
       {/* Subject Filter (Normal Wrapping Pills) */}
       <div className="flex flex-wrap gap-1.5 font-mono text-xs">
-        {(['All', 'Physics', 'Mathematics', 'Physical Chemistry', 'Organic Chemistry', 'Inorganic Chemistry'] as SubjectFilter[]).map((sub) => (
+        {subjectOptions.map((sub) => (
           <button
             key={sub}
             onClick={() => setFilter(sub)}
-            className={`px-2.5 py-1.5 rounded border text-xs transition-colors ${
+            className={`px-2.5 py-1.5 rounded text-xs transition-colors border ${
               filter === sub
-                ? 'bg-white text-black font-bold border-white'
+                ? 'bg-zinc-200 text-black font-bold border-zinc-200'
                 : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-200'
             }`}
           >
@@ -337,7 +336,7 @@ export const BacklogHub: React.FC = () => {
                   </h3>
 
                   <div className="flex items-center gap-1 mt-1 text-[11px] font-mono text-zinc-400">
-                    <Clock className="w-3 h-3 text-zinc-500" />
+                    <Clock className="w-3.5 h-3.5 text-zinc-500" />
                     <span>~{item.duration} One-Shot</span>
                   </div>
                 </div>
