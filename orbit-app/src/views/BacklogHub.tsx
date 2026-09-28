@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   AI_MODELS,
-  AIModelKey,
+  type AIModelKey,
   getSavedAIModel,
   saveAIModel,
   generateStudyPlan,
@@ -109,7 +109,7 @@ export const BacklogHub: React.FC = () => {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Generation failed';
       setErrorMessage(
-        `${msg}. If ${AI_MODELS[selectedModel].name} is experiencing high traffic spikes, switch to another model from the dropdown above.`
+        `${msg}. If ${AI_MODELS[selectedModel].name} is experiencing spikes, switch to another model from the dropdown above.`
       );
     } finally {
       setLoadingId(null);
@@ -156,7 +156,7 @@ export const BacklogHub: React.FC = () => {
         </div>
       </div>
 
-      {/* Traffic Spike / Error Banner */}
+      {/* Traffic Spike Notice */}
       {errorMessage && (
         <div className="p-4 bg-amber-950/40 border border-amber-800/60 rounded-xl text-amber-200 text-sm flex items-start justify-between gap-3">
           <div>
@@ -176,7 +176,6 @@ export const BacklogHub: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Input Form & Backlog List */}
         <div className="lg:col-span-7 space-y-6">
-          {/* Add Item Card */}
           <form
             onSubmit={handleAddBacklog}
             className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-5 space-y-4 shadow-sm"
@@ -311,14 +310,17 @@ export const BacklogHub: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Actions */}
                   <div className="flex items-center gap-2 self-end sm:self-center">
                     <button
                       onClick={() => handleGeneratePlan(item)}
                       disabled={loadingId === item.id}
                       className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-indigo-300 border border-zinc-700 rounded-lg text-xs font-medium transition"
                     >
-                      {loadingId === item.id ? 'Generating...' : item.roadmap ? 'Re-plan (AI)' : 'AI Plan'}
+                      {loadingId === item.id
+                        ? 'Generating...'
+                        : item.roadmap
+                        ? 'Re-plan (AI)'
+                        : 'AI Plan'}
                     </button>
 
                     {item.roadmap && (
@@ -344,7 +346,7 @@ export const BacklogHub: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Column: AI Plan Display */}
+        {/* Right Column: Roadmap View */}
         <div className="lg:col-span-5">
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 sticky top-6 space-y-4 min-h-[400px]">
             <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
@@ -372,7 +374,7 @@ export const BacklogHub: React.FC = () => {
               <div className="h-64 flex flex-col items-center justify-center text-center text-zinc-500 text-xs px-4">
                 <p>No active roadmap selected.</p>
                 <p className="mt-1 text-zinc-600">
-                  Select any backlog item and click <strong>AI Plan</strong> to construct a step-by-step strategy using {AI_MODELS[selectedModel].name}.
+                  Select any backlog item and click <strong>AI Plan</strong> to construct a strategy using {AI_MODELS[selectedModel].name}.
                 </p>
               </div>
             )}
