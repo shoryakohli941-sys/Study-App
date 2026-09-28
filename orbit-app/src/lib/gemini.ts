@@ -1,4 +1,9 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+// Global polyfill for NodeJS.Timeout in Vite browser environments
+declare global {
+  namespace NodeJS {
+    type Timeout = any;
+  }
+}
 
 // Handpicked credit-efficient, high-speed Flash models from Google AI Studio
 export const AI_MODELS = {
@@ -22,6 +27,45 @@ export const DEFAULT_AI_MODEL: AIModelKey = 'gemini-3.8-flash';
 const MODEL_STORAGE_KEY = 'orbit_selected_ai_model';
 const API_KEY_STORAGE = 'orbit_gemini_api_key';
 
+export interface GeminiResponse {
+  answer?: string;
+  solution?: string;
+  explanation?: string;
+  hints?: string[];
+  steps?: string[];
+  topic?: string;
+  subtopic?: string;
+  difficulty?: string;
+  concepts?: string[];
+  rawText?: string;
+  [key: string]: any;
+}
+
+export function getApiKey(): string {
+  try {
+    return (
+      localStorage.getItem(API_KEY_STORAGE) ||
+      (import.meta.env.VITE_GEMINI_API_KEY as string) ||
+      ''
+    );
+  } catch {
+    return (import.meta.env.VITE_GEMINI_API_KEY as string) || '';
+  }
+}
+
+export function setApiKey(key: string): void {
+  try {
+    localStorage.setItem(API_KEY_STORAGE, key.trim());
+  } catch {
+    // Ignore storage write errors
+  }
+}
+
+export function hasValidApiKey(): boolean {
+  const key = getApiKey();
+  return Boolean(key && key.trim().length > 0);
+}
+
 export function getSavedAIModel(): AIModelKey {
   try {
     const saved = localStorage.getItem(MODEL_STORAGE_KEY) as AIModelKey;
@@ -42,17 +86,8 @@ export function saveAIModel(modelKey: AIModelKey): void {
   }
 }
 
-export function getApiKey(): string {
-  return (
-    localStorage.getItem(API_KEY_STORAGE) ||
-    (import.meta.env.VITE_GEMINI_API_KEY as string) ||
-    ''
-  );
-}
-
-export async function generateStudyPlan(
-  topic: string,
-  subject: string,
+async function callGeminiApi(
+  body: Record<string, any>,
   modelKey: AIModelKey = getSavedAIModel()
 ): Promise<string> {
   const apiKey = getApiKey();
@@ -60,10 +95,33 @@ export async function generateStudyPlan(
     throw new Error('Gemini API Key missing. Please provide your key in settings.');
   }
 
-  const selectedModelId = AI_MODELS[modelKey]?.id || AI_MODELS[DEFAULT_AI_MODEL].id;
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: selectedModelId });
+  const modelId = AI_MODELS[modelKey]?.id || AI_MODELS[DEFAULT_AI_MODEL].id;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
 
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    const msg = errorData?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
+    throw new Error(msg);
+  }
+
+  const data = await response.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  return text;
+}
+
+export async function generateStudyPlan(
+  topic: string,
+  subject: string,
+  modelKey: AIModelKey = getSavedAIModel()
+): Promise<string> {
   const prompt = `You are a high-yield study strategist for competitive exams.
 Break down this backlog topic into an actionable, prioritized roadmap:
 - Subject: ${subject}
@@ -77,7 +135,84 @@ Provide:
 
 Keep it concise, actionable, and formatted in clean Markdown.`;
 
-  const result = await model.generateContent(prompt);
-  const response = await result.response;
-  return response.text();
+  return callGeminiApi(
+    {
+      contents: [
+        {
+          parts: [{ text: prompt }],
+        },
+      ],
+    },
+    modelKey
+  );
 }
+
+export async function analyzeImage(
+  imageData: string,
+  arg2?: string,
+  arg3?: string,
+  modelKey: AIModelKey = getSavedAIModel()
+): Promise<GeminiResponse> {
+  let mimeType = 'image/jpeg';
+  let base64Data = imageData;
+
+  if (imageData.startsWith('data:')) {
+    const parts = imageData.split(',');
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    if (mimeMatch) {
+      mimeType = mimeMatch[1];
+    }
+    base64Data = parts[1] || '';
+  }
+
+  let prompt =
+    'Analyze this study problem. Provide the final answer, step-by-step solution, core concepts, and progressive hints in JSON format.';
+  if (arg2) {
+    if (arg2.includes('/')) {
+      mimeType = arg2;
+      if (arg3) prompt = arg3;
+    } else {
+      prompt = arg2;
+    }
+  }
+
+  const text = await callGeminiApi(
+    {
+      contents: [
+        {
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType,
+                data: base64Data,
+              },
+            },
+          ],
+        },
+      ],
+    },
+    modelKey
+  );
+
+  let parsed: GeminiResponse = {
+    answer: text,
+    solution: text,
+    explanation: text,
+    hints: [text],
+    steps: [],
+    rawText: text,
+  };
+
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const jsonParsed = JSON.parse(jsonMatch[0]);
+      parsed = { ...parsed, ...jsonParsed };
+    }
+  } catch {
+    // Retain plain text fallback
+  }
+
+  return parsed;
+}      
