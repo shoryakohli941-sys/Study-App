@@ -1,4 +1,4 @@
-// Polyfill NodeJS namespace for Vite browser environments
+// Polyfill NodeJS namespace for browser environments (resolves NodeJS.Timeout TS error)
 declare global {
   namespace NodeJS {
     type Timeout = any;
@@ -121,6 +121,146 @@ async function callGeminiApi(
   return text;
 }
 
+function parseGeminiJson(rawText: string, defaultTopic = 'General Doubt'): GeminiResponse {
+  let parsed: GeminiResponse = {
+    answer: rawText,
+    solution: rawText,
+    explanation: rawText,
+    hints: [rawText],
+    steps: [rawText],
+    topic: defaultTopic,
+    subtopic: 'Concept Analysis',
+    difficulty: 'Medium',
+    concepts: [],
+    rawText: rawText,
+    question: '',
+    title: defaultTopic,
+    keyFormula: '',
+  };
+
+  try {
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const jsonParsed = JSON.parse(jsonMatch[0]);
+      parsed = {
+        ...parsed,
+        ...jsonParsed,
+        answer: jsonParsed.answer || parsed.answer,
+        solution: jsonParsed.solution || parsed.solution,
+        explanation: jsonParsed.explanation || parsed.explanation,
+        hints: Array.isArray(jsonParsed.hints)
+          ? jsonParsed.hints
+          : [jsonParsed.hints || rawText],
+        steps: Array.isArray(jsonParsed.steps)
+          ? jsonParsed.steps
+          : [jsonParsed.steps || rawText],
+        concepts: Array.isArray(jsonParsed.concepts) ? jsonParsed.concepts : [],
+        keyFormula: jsonParsed.keyFormula || '',
+        title: jsonParsed.title || parsed.title,
+        question: jsonParsed.question || parsed.question,
+      };
+    }
+  } catch {
+    // Keep fallback plain-text structure
+  }
+
+  return parsed;
+}
+
+// Direct Text / Doubt Analysis (No image required)
+export async function analyzeText(
+  doubtText: string,
+  modelKey: AIModelKey = getSavedAIModel()
+): Promise<GeminiResponse> {
+  const prompt = `You are a precision STEM exam tutor and conceptual problem-solving coach.
+Analyze this student's specific doubt or problem statement:
+"""
+${doubtText}
+"""
+
+Return a strictly valid JSON object (no markdown wrapping) containing:
+{
+  "title": "Short descriptive title of the concept/problem",
+  "question": "${doubtText.replace(/"/g, "'").slice(0, 150)}",
+  "topic": "Physics/Chemistry/Math/Biology topic name",
+  "subtopic": "Specific subtopic",
+  "difficulty": "Easy" | "Medium" | "Hard",
+  "hints": ["Hint 1: Conceptual clue", "Hint 2: Relevant equation/property", "Hint 3: Execution direction"],
+  "steps": ["Step 1 breakdown", "Step 2 breakdown", "Step 3 final resolution"],
+  "answer": "Final concise answer or core conclusion",
+  "solution": "Complete step-by-step rigorous solution and logic",
+  "explanation": "Why this approach works and what mistake students commonly make here",
+  "concepts": ["Key Concept 1", "Key Concept 2"],
+  "keyFormula": "Primary formula or governing law"
+}`;
+
+  const text = await callGeminiApi(
+    {
+      contents: [
+        {
+          parts: [{ text: prompt }],
+        },
+      ],
+    },
+    modelKey
+  );
+
+  return parseGeminiJson(text, 'Text Doubt');
+}
+
+// Image Analysis with optional accompanying text prompt
+export async function analyzeImage(
+  imageData: string,
+  arg2?: string,
+  arg3?: string,
+  modelKey: AIModelKey = getSavedAIModel()
+): Promise<GeminiResponse> {
+  let mimeType = 'image/jpeg';
+  let base64Data = imageData;
+
+  if (imageData.startsWith('data:')) {
+    const parts = imageData.split(',');
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    if (mimeMatch) {
+      mimeType = mimeMatch[1];
+    }
+    base64Data = parts[1] || '';
+  }
+
+  let prompt = `Analyze this problem image. Return a strictly valid JSON object with keys:
+"title", "question", "topic", "subtopic", "difficulty", "hints" (array of progressive strings), "steps" (array of strings), "answer", "solution", "explanation", "concepts" (array), "keyFormula".`;
+
+  if (arg2) {
+    if (arg2.includes('/')) {
+      mimeType = arg2;
+      if (arg3) prompt = arg3;
+    } else {
+      prompt = `${prompt}\nAdditional student note: ${arg2}`;
+    }
+  }
+
+  const text = await callGeminiApi(
+    {
+      contents: [
+        {
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType,
+                data: base64Data,
+              },
+            },
+          ],
+        },
+      ],
+    },
+    modelKey
+  );
+
+  return parseGeminiJson(text, 'Problem Breakdown');
+}
+
 export async function generateStudyPlan(
   topic: string,
   subject: string,
@@ -149,90 +289,4 @@ Keep it concise, actionable, and formatted in clean Markdown.`;
     },
     modelKey
   );
-}
-
-export async function analyzeImage(
-  imageData: string,
-  arg2?: string,
-  arg3?: string,
-  modelKey: AIModelKey = getSavedAIModel()
-): Promise<GeminiResponse> {
-  let mimeType = 'image/jpeg';
-  let base64Data = imageData;
-
-  if (imageData.startsWith('data:')) {
-    const parts = imageData.split(',');
-    const mimeMatch = parts[0].match(/:(.*?);/);
-    if (mimeMatch) {
-      mimeType = mimeMatch[1];
-    }
-    base64Data = parts[1] || '';
-  }
-
-  let prompt =
-    'Analyze this study problem. Provide the final answer, step-by-step solution, core concepts, and progressive hints in JSON format.';
-  if (arg2) {
-    if (arg2.includes('/')) {
-      mimeType = arg2;
-      if (arg3) prompt = arg3;
-    } else {
-      prompt = arg2;
-    }
-  }
-
-  const text = await callGeminiApi(
-    {
-      contents: [
-        {
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType,
-                data: base64Data,
-              },
-            },
-          ],
-        },
-      ],
-    },
-    modelKey
-  );
-
-  let parsed: GeminiResponse = {
-    answer: text,
-    solution: text,
-    explanation: text,
-    hints: [text],
-    steps: [text],
-    topic: 'General',
-    subtopic: 'General',
-    difficulty: 'Medium',
-    concepts: [],
-    rawText: text,
-    question: '',
-    title: '',
-    keyFormula: '',
-  };
-
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const jsonParsed = JSON.parse(jsonMatch[0]);
-      parsed = {
-        ...parsed,
-        ...jsonParsed,
-        hints: Array.isArray(jsonParsed.hints)
-          ? jsonParsed.hints
-          : [jsonParsed.hints || text],
-        steps: Array.isArray(jsonParsed.steps)
-          ? jsonParsed.steps
-          : [jsonParsed.steps || text],
-      };
-    }
-  } catch {
-    // Keep fallback plain-text structure
-  }
-
-  return parsed;
 }
