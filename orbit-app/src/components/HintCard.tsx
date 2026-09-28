@@ -7,7 +7,7 @@ export interface HintCardProps {
   onReset?: () => void;
 }
 
-export const HintCard: React.FC<HintCardProps> = ({ response, content, onReset }) => {
+export const HintCard: React.FC<HintCardProps> = ({ response, content }) => {
   const [step, setStep] = useState(0);
 
   // Fallback to basic string content if full response isn't provided
