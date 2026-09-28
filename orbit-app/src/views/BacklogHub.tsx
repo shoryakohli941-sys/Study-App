@@ -1,376 +1,384 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Clock, 
-  ExternalLink, 
-  Target, 
-  Check, 
-  Film, 
-  CheckCircle2, 
-  Circle, 
-  PlayCircle,
-  Search,
-  Sparkles,
-  ChevronDown
-} from 'lucide-react';
+import {
+  AI_MODELS,
+  AIModelKey,
+  getSavedAIModel,
+  saveAIModel,
+  generateStudyPlan,
+} from '../lib/gemini';
 
-import { BACKLOG_CHAPTERS, PLAYLIST_LINKS, type Chapter } from '../data/manzilPlaylists';
-import { db } from '../db';
-
-type SubjectFilter = 'All' | 'Physics' | 'Mathematics' | 'Physical Chemistry' | 'Organic Chemistry' | 'Inorganic Chemistry';
-
-const ChapterThumbnail: React.FC<{ 
-  videoId?: string; 
-  title: string; 
-  subject: string; 
-  duration: string;
-}> = ({ videoId, title, subject, duration }) => {
-  const [loadError, setLoadError] = useState(false);
-
-  if (videoId && videoId.length === 11 && !loadError) {
-    return (
-      <div className="relative w-28 h-20 shrink-0 rounded-md overflow-hidden bg-zinc-900 border border-zinc-800">
-        <img
-          src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
-          alt={title}
-          referrerPolicy="no-referrer"
-          crossOrigin="anonymous"
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-          loading="lazy"
-          onError={() => setLoadError(true)}
-        />
-        <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors flex items-center justify-center">
-          <PlayCircle className="w-5 h-5 text-white/90 drop-shadow" />
-        </div>
-      </div>
-    );
-  }
-
-  const getSubCode = (s: string) => {
-    if (s === 'Physics') return 'PHY';
-    if (s === 'Mathematics') return 'MATH';
-    if (s.includes('Organic')) return 'OC';
-    if (s.includes('Inorganic')) return 'IOC';
-    return 'PC';
-  };
-
-  return (
-    <div className="relative w-28 h-20 shrink-0 rounded-md bg-zinc-950 border border-zinc-800 flex flex-col justify-between p-2 select-none group-hover:border-zinc-700 transition-colors">
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] font-mono font-bold tracking-wider text-zinc-300">
-          {getSubCode(subject)}
-        </span>
-        <PlayCircle className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
-      </div>
-      <div>
-        <div className="text-[10px] font-bold text-zinc-100 line-clamp-1 leading-tight">
-          PW MANZIL
-        </div>
-        <div className="text-[9px] font-mono text-zinc-400 mt-0.5">
-          {duration}
-        </div>
-      </div>
-    </div>
-  );
-};
+interface BacklogItem {
+  id: string;
+  topic: string;
+  subject: string;
+  priority: 'High' | 'Medium' | 'Low';
+  hours: number;
+  completed: boolean;
+  roadmap?: string;
+}
 
 export const BacklogHub: React.FC = () => {
-  const [filter, setFilter] = useState<SubjectFilter>('All');
-  const [classFilter, setClassFilter] = useState<'All' | 11 | 12>('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  const [completedIds, setCompletedIds] = useState<Set<string>>(() => {
+  const [selectedModel, setSelectedModel] = useState<AIModelKey>(getSavedAIModel());
+  const [backlogs, setBacklogs] = useState<BacklogItem[]>(() => {
     try {
-      const saved = localStorage.getItem('orbit_completed_backlog');
-      return saved ? new Set(JSON.parse(saved)) : new Set();
+      const stored = localStorage.getItem('orbit_backlogs');
+      return stored
+        ? JSON.parse(stored)
+        : [
+            {
+              id: '1',
+              topic: 'Rotational Dynamics & Moment of Inertia',
+              subject: 'Physics',
+              priority: 'High',
+              hours: 6,
+              completed: false,
+            },
+            {
+              id: '2',
+              topic: 'Chemical Equilibrium & Le Chatelier',
+              subject: 'Chemistry',
+              priority: 'Medium',
+              hours: 4,
+              completed: false,
+            },
+          ];
     } catch {
-      return new Set();
+      return [];
     }
   });
 
-  const [addedGoals, setAddedGoals] = useState<Set<string>>(new Set());
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [newTopic, setNewTopic] = useState('');
+  const [newSubject, setNewSubject] = useState('Physics');
+  const [newPriority, setNewPriority] = useState<'High' | 'Medium' | 'Low'>('High');
+  const [newHours, setNewHours] = useState(4);
+  const [activePlanId, setActivePlanId] = useState<string | null>(null);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    localStorage.setItem('orbit_completed_backlog', JSON.stringify(Array.from(completedIds)));
-  }, [completedIds]);
+    localStorage.setItem('orbit_backlogs', JSON.stringify(backlogs));
+  }, [backlogs]);
 
-  const toggleComplete = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCompletedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const nextModel = e.target.value as AIModelKey;
+    setSelectedModel(nextModel);
+    saveAIModel(nextModel);
+    setErrorMessage(null);
   };
 
-  const getLocalDate = () => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+  const handleAddBacklog = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTopic.trim()) return;
+
+    const newItem: BacklogItem = {
+      id: Date.now().toString(),
+      topic: newTopic.trim(),
+      subject: newSubject,
+      priority: newPriority,
+      hours: Number(newHours) || 3,
+      completed: false,
+    };
+
+    setBacklogs((prev) => [newItem, ...prev]);
+    setNewTopic('');
   };
 
-  const handleAddToDailyGoals = async (ch: Chapter, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
+  const handleToggleComplete = (id: string) => {
+    setBacklogs((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, completed: !item.completed } : item
+      )
+    );
+  };
+
+  const handleDeleteItem = (id: string) => {
+    setBacklogs((prev) => prev.filter((item) => item.id !== id));
+    if (activePlanId === id) setActivePlanId(null);
+  };
+
+  const handleGeneratePlan = async (item: BacklogItem) => {
+    setLoadingId(item.id);
+    setErrorMessage(null);
 
     try {
-      const localToday = getLocalDate();
-      const subjectGroup: 'Physics' | 'Chemistry' | 'Mathematics' = 
-        ch.subject.includes('Chemistry') ? 'Chemistry' : (ch.subject as 'Physics' | 'Mathematics');
-
-      const taskPayload = {
-        date: localToday,
-        title: `Manzil: ${ch.chapter}`,
-        text: `Manzil: ${ch.chapter}`,
-        name: `Manzil: ${ch.chapter}`,
-        subject: subjectGroup,
-        completed: false,
-        priority: 'high',
-        createdAt: Date.now()
-      };
-
-      const table = (db as any).plannerTasks || (db as any).tasks;
-      if (table) {
-        try {
-          await table.add(taskPayload);
-        } catch {
-          await table.add({ ...taskPayload, id: Date.now() });
-        }
-      }
-
-      setAddedGoals((prev) => new Set(prev).add(ch.id));
-      setToastMessage(`Added to Goals: ${ch.chapter}`);
-
-      setTimeout(() => {
-        setAddedGoals((prev) => {
-          const next = new Set(prev);
-          next.delete(ch.id);
-          return next;
-        });
-      }, 3000);
-
-      setTimeout(() => setToastMessage(null), 3500);
-    } catch (err) {
-      console.error('Failed to add goal:', err);
+      const plan = await generateStudyPlan(item.topic, item.subject, selectedModel);
+      setBacklogs((prev) =>
+        prev.map((b) => (b.id === item.id ? { ...b, roadmap: plan } : b))
+      );
+      setActivePlanId(item.id);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Generation failed';
+      setErrorMessage(
+        `${msg}. If ${AI_MODELS[selectedModel].name} is experiencing high traffic spikes, switch to another model from the dropdown above.`
+      );
+    } finally {
+      setLoadingId(null);
     }
   };
 
-  const filtered = BACKLOG_CHAPTERS.filter((item) => {
-    const matchSub = filter === 'All' || item.subject === filter;
-    const matchClass = classFilter === 'All' || item.classLevel === classFilter;
-    const matchSearch = searchQuery.trim() === '' || 
-      item.chapter.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.subject.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchSub && matchClass && matchSearch;
-  });
-
-  const completionPct = Math.round((completedIds.size / BACKLOG_CHAPTERS.length) * 100);
+  const activeBacklog = backlogs.find((b) => b.id === activePlanId);
 
   return (
-    <div className="min-h-screen bg-black text-white pb-32 pt-4 px-4 max-w-xl mx-auto space-y-4">
-      
-      {/* Station HUD */}
-      <div className="border border-zinc-800 bg-zinc-950 p-4 rounded-xl space-y-3 font-mono">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-base font-bold uppercase tracking-wider text-white">
-              Backlog Mission Control
-            </h1>
-            <p className="text-[11px] text-zinc-500">
-              {BACKLOG_CHAPTERS.length} Chapters • Full PW Manzil Feed
-            </p>
-          </div>
-          <div className="text-right">
-            <span className="text-xl font-bold text-white tabular-nums">{completionPct}%</span>
-            <span className="block text-[9px] uppercase tracking-widest text-zinc-500">Mastered</span>
-          </div>
+    <div className="p-6 max-w-7xl mx-auto space-y-6 text-zinc-100">
+      {/* Top Header & AI Model Switcher */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-zinc-800">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-white">Backlog Hub</h1>
+          <p className="text-sm text-zinc-400">
+            Audit, decompose, and clear pending syllabus backlogs
+          </p>
         </div>
 
-        <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
-          <div 
-            className="h-full bg-white transition-all duration-500 ease-out" 
-            style={{ width: `${completionPct}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Floating Status Toast */}
-      {toastMessage && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-white text-black px-4 py-2 rounded-full shadow-2xl font-mono text-xs flex items-center gap-2">
-          <Sparkles className="w-3.5 h-3.5 shrink-0" />
-          <span className="truncate max-w-[280px]">{toastMessage}</span>
-        </div>
-      )}
-
-      {/* Search Input Bar */}
-      <div className="relative">
-        <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Filter chapter (e.g. Kinematics, GOC, Integration)..."
-          className="w-full pl-9 pr-4 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
-        />
-      </div>
-
-      {/* Class Level Filters */}
-      <div className="flex gap-2 font-mono text-xs">
-        {(['All', 11, 12] as const).map((lvl) => (
-          <button
-            key={lvl}
-            onClick={() => setClassFilter(lvl)}
-            className={`flex-1 py-1.5 rounded border transition-colors text-center ${
-              classFilter === lvl 
-                ? 'bg-white text-black font-semibold border-white' 
-                : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-700'
-            }`}
-          >
-            {lvl === 'All' ? 'All Classes' : `Class ${lvl}`}
-          </button>
-        ))}
-      </div>
-
-      {/* Subject Filter (Standard Dropdown Menu) */}
-      <div className="relative font-mono">
-        <select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value as SubjectFilter)}
-          className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-3 pr-10 py-2.5 text-xs text-zinc-200 focus:outline-none focus:border-zinc-500 appearance-none cursor-pointer transition-colors"
-        >
-          <option value="All">All Subjects (Full Syllabus)</option>
-          <option value="Physics">Physics</option>
-          <option value="Mathematics">Mathematics</option>
-          <option value="Physical Chemistry">Physical Chemistry</option>
-          <option value="Organic Chemistry">Organic Chemistry</option>
-          <option value="Inorganic Chemistry">Inorganic Chemistry</option>
-        </select>
-        <ChevronDown className="w-4 h-4 text-zinc-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-      </div>
-
-      {/* Direct YouTube Playlist Launcher */}
-      {filter !== 'All' && PLAYLIST_LINKS[filter] && (
-        <a
-          href={PLAYLIST_LINKS[filter]}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center justify-between p-3 rounded-lg bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-300 hover:text-white hover:border-zinc-600 transition-all group"
-        >
-          <span className="flex items-center gap-2">
-            <Film className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
-            Open Official {filter} Playlist on YouTube
-          </span>
-          <ExternalLink className="w-3.5 h-3.5 text-zinc-400 group-hover:text-white" />
-        </a>
-      )}
-
-      {/* Feed */}
-      <div className="space-y-2.5">
-        {filtered.map((item) => {
-          const isDone = completedIds.has(item.id);
-          const isAdded = addedGoals.has(item.id);
-          const targetUrl = item.videoId
-            ? `https://www.youtube.com/watch?v=${item.videoId}`
-            : `https://www.youtube.com/results?search_query=PW+Manzil+JEE+${encodeURIComponent(item.chapter)}`;
-
-          return (
-            <div
-              key={item.id}
-              onClick={() => handleAddToDailyGoals(item)}
-              className={`p-3 rounded-xl border transition-all cursor-pointer group flex flex-col justify-between gap-2.5 ${
-                isDone 
-                  ? 'bg-zinc-950/40 border-zinc-900 opacity-60' 
-                  : isAdded
-                  ? 'bg-zinc-900 border-white/60'
-                  : 'bg-zinc-950 border-zinc-800/80 hover:border-zinc-600 hover:bg-zinc-900/50'
-              }`}
+        {/* Dynamic Model Dropdown */}
+        <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 px-3.5 py-2 rounded-xl shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <label
+              htmlFor="ai-model-select"
+              className="text-xs font-semibold text-zinc-400 uppercase tracking-wider"
             >
-              <div className="flex items-start gap-3">
-                <button
-                  onClick={(e) => toggleComplete(item.id, e)}
-                  className="mt-1 text-zinc-500 hover:text-white transition-colors shrink-0"
-                  aria-label="Toggle Complete"
-                >
-                  {isDone ? (
-                    <CheckCircle2 className="w-5 h-5 text-white" />
-                  ) : (
-                    <Circle className="w-5 h-5 text-zinc-600 hover:text-zinc-400" />
-                  )}
-                </button>
+              AI Engine:
+            </label>
+          </div>
 
-                <div className="shrink-0">
-                  <ChapterThumbnail
-                    videoId={item.videoId}
-                    title={item.chapter}
-                    subject={item.subject}
-                    duration={item.duration}
+          <select
+            id="ai-model-select"
+            value={selectedModel}
+            onChange={handleModelChange}
+            className="bg-zinc-800 hover:bg-zinc-750 text-xs font-medium text-white px-2.5 py-1.5 rounded-lg border border-zinc-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+          >
+            {Object.entries(AI_MODELS).map(([key, model]) => (
+              <option key={key} value={key} className="bg-zinc-900 text-white">
+                {model.name} — {model.badge}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Traffic Spike / Error Banner */}
+      {errorMessage && (
+        <div className="p-4 bg-amber-950/40 border border-amber-800/60 rounded-xl text-amber-200 text-sm flex items-start justify-between gap-3">
+          <div>
+            <p className="font-semibold text-amber-100">AI Request Notice</p>
+            <p className="mt-0.5 text-xs text-amber-300/90">{errorMessage}</p>
+          </div>
+          <button
+            onClick={() => setErrorMessage(null)}
+            className="text-xs text-amber-400 hover:text-amber-200 font-bold px-2 py-1"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Main Grid: Form + List & Roadmap */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Column: Input Form & Backlog List */}
+        <div className="lg:col-span-7 space-y-6">
+          {/* Add Item Card */}
+          <form
+            onSubmit={handleAddBacklog}
+            className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-5 space-y-4 shadow-sm"
+          >
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
+              Log Unfinished Topic
+            </h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2">
+                <input
+                  type="text"
+                  placeholder="Chapter or Topic name..."
+                  value={newTopic}
+                  onChange={(e) => setNewTopic(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <select
+                  value={newSubject}
+                  onChange={(e) => setNewSubject(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="Physics">Physics</option>
+                  <option value="Chemistry">Chemistry</option>
+                  <option value="Mathematics">Mathematics</option>
+                  <option value="Biology">Biology</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                  <span>Priority:</span>
+                  <select
+                    value={newPriority}
+                    onChange={(e) =>
+                      setNewPriority(e.target.value as 'High' | 'Medium' | 'Low')
+                    }
+                    className="bg-zinc-950 border border-zinc-800 rounded-md px-2 py-1 text-xs text-white focus:outline-none"
+                  >
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                  <span>Est. Hours:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="40"
+                    value={newHours}
+                    onChange={(e) => setNewHours(Number(e.target.value))}
+                    className="w-14 bg-zinc-950 border border-zinc-800 rounded-md px-2 py-1 text-xs text-white focus:outline-none"
                   />
                 </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                    <span className="text-[9px] font-mono text-zinc-400 uppercase tracking-wider px-1.5 py-0.5 bg-zinc-900 rounded border border-zinc-800">
-                      Class {item.classLevel}
-                    </span>
-                    <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">
-                      {item.subject}
-                    </span>
-                    {item.weightage === 'High' && (
-                      <span className="text-[9px] font-mono text-white bg-zinc-800 px-1.5 py-0.5 rounded font-semibold">
-                        HIGH YIELD
-                      </span>
-                    )}
-                  </div>
-
-                  <h3 className={`text-xs font-semibold leading-snug line-clamp-2 ${isDone ? 'line-through text-zinc-500' : 'text-zinc-100'}`}>
-                    {item.chapter}
-                  </h3>
-
-                  <div className="flex items-center gap-1 mt-1 text-[11px] font-mono text-zinc-400">
-                    <Clock className="w-3.5 h-3.5 text-zinc-500" />
-                    <span>~{item.duration} One-Shot</span>
-                  </div>
-                </div>
               </div>
 
-              <div className="flex items-center justify-between pt-2 border-t border-zinc-900 font-mono text-xs">
-                <a
-                  href={targetUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-white transition-colors"
-                >
-                  Watch Lecture <ExternalLink className="w-3 h-3 ml-0.5" />
-                </a>
+              <button
+                type="submit"
+                className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition"
+              >
+                + Add to Backlog
+              </button>
+            </div>
+          </form>
 
-                <button
-                  onClick={(e) => handleAddToDailyGoals(item, e)}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] transition-all border ${
-                    isAdded
-                      ? 'bg-white text-black border-white font-semibold'
-                      : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:text-white hover:border-zinc-600'
+          {/* List of Backlogs */}
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
+              Active Queue ({backlogs.filter((b) => !b.completed).length})
+            </h2>
+
+            {backlogs.length === 0 ? (
+              <div className="p-8 text-center bg-zinc-900/50 border border-zinc-800/80 rounded-xl text-zinc-500 text-sm">
+                No backlogs recorded. You're completely caught up!
+              </div>
+            ) : (
+              backlogs.map((item) => (
+                <div
+                  key={item.id}
+                  className={`p-4 rounded-xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                    item.completed
+                      ? 'bg-zinc-950/60 border-zinc-900 opacity-60'
+                      : 'bg-zinc-900 border-zinc-800'
                   }`}
                 >
-                  {isAdded ? (
-                    <>
-                      <Check className="w-3 h-3 text-black" /> In Goals
-                    </>
-                  ) : (
-                    <>
-                      <Target className="w-3 h-3" /> + Add Goal
-                    </>
-                  )}
-                </button>
-              </div>
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={item.completed}
+                      onChange={() => handleToggleComplete(item.id)}
+                      className="mt-1 h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-indigo-600 focus:ring-0 cursor-pointer"
+                    />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-sm font-medium ${
+                            item.completed ? 'line-through text-zinc-500' : 'text-zinc-100'
+                          }`}
+                        >
+                          {item.topic}
+                        </span>
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                          {item.subject}
+                        </span>
+                      </div>
 
+                      <div className="flex items-center gap-2 mt-1 text-xs text-zinc-400">
+                        <span>
+                          Priority:{' '}
+                          <strong
+                            className={
+                              item.priority === 'High'
+                                ? 'text-rose-400'
+                                : item.priority === 'Medium'
+                                ? 'text-amber-400'
+                                : 'text-emerald-400'
+                            }
+                          >
+                            {item.priority}
+                          </strong>
+                        </span>
+                        <span>•</span>
+                        <span>{item.hours}h allotted</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 self-end sm:self-center">
+                    <button
+                      onClick={() => handleGeneratePlan(item)}
+                      disabled={loadingId === item.id}
+                      className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-indigo-300 border border-zinc-700 rounded-lg text-xs font-medium transition"
+                    >
+                      {loadingId === item.id ? 'Generating...' : item.roadmap ? 'Re-plan (AI)' : 'AI Plan'}
+                    </button>
+
+                    {item.roadmap && (
+                      <button
+                        onClick={() => setActivePlanId(item.id)}
+                        className="px-3 py-1.5 bg-indigo-950/60 hover:bg-indigo-900 text-indigo-300 border border-indigo-800/80 rounded-lg text-xs font-medium transition"
+                      >
+                        View Plan
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => handleDeleteItem(item.id)}
+                      className="text-zinc-500 hover:text-rose-400 p-1.5 text-xs transition"
+                      title="Delete item"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: AI Plan Display */}
+        <div className="lg:col-span-5">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 sticky top-6 space-y-4 min-h-[400px]">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
+                Action Roadmap
+              </h2>
+              <span className="text-[11px] text-zinc-500 font-mono">
+                Model: {AI_MODELS[selectedModel].id}
+              </span>
             </div>
-          );
-        })}
-      </div>
 
+            {activeBacklog?.roadmap ? (
+              <div className="space-y-3">
+                <div className="pb-2 border-b border-zinc-800/80">
+                  <h3 className="text-base font-semibold text-white">
+                    {activeBacklog.topic}
+                  </h3>
+                  <p className="text-xs text-zinc-400">{activeBacklog.subject}</p>
+                </div>
+                <div className="text-xs leading-relaxed text-zinc-300 whitespace-pre-wrap font-sans">
+                  {activeBacklog.roadmap}
+                </div>
+              </div>
+            ) : (
+              <div className="h-64 flex flex-col items-center justify-center text-center text-zinc-500 text-xs px-4">
+                <p>No active roadmap selected.</p>
+                <p className="mt-1 text-zinc-600">
+                  Select any backlog item and click <strong>AI Plan</strong> to construct a step-by-step strategy using {AI_MODELS[selectedModel].name}.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
