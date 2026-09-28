@@ -240,22 +240,23 @@ export const BacklogHub: React.FC = () => {
         ))}
       </div>
 
-      {/* Subject Filter (Normal Wrapping Pills) */}
-      <div className="flex flex-wrap gap-1.5 font-mono text-xs">
-        {subjectOptions.map((sub) => (
-          <button
-            key={sub}
-            onClick={() => setFilter(sub)}
-            className={`px-2.5 py-1.5 rounded text-xs transition-colors border ${
-              filter === sub
-                ? 'bg-zinc-200 text-black font-bold border-zinc-200'
-                : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-200'
-            }`}
-          >
-            {sub}
-          </button>
-        ))}
-      </div>
+
+      {/* Subject Filter (Wrapping Pills) */}
+<div className="flex flex-wrap gap-1.5">
+  {(['All', 'Physics', 'Mathematics', 'Physical Chemistry', 'Organic Chemistry', 'Inorganic Chemistry'] as SubjectFilter[]).map((sub) => (
+    <button
+      key={sub}
+      onClick={() => setFilter(sub)}
+      className={`px-2.5 py-1 rounded text-xs font-mono transition-colors border ${
+        filter === sub
+          ? 'bg-white text-black font-bold border-white'
+          : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-700'
+      }`}
+    >
+      {sub}
+        </button>
+      ))}
+    </div>
 
       {/* Direct YouTube Playlist Launcher */}
       {filter !== 'All' && PLAYLIST_LINKS[filter] && (
