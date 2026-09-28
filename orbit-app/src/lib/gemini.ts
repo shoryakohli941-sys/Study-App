@@ -32,8 +32,8 @@ export const AI_MODELS = {
     description: 'Stable price-to-performance ratio for consistent background prompts',
   },
   'gemini-3.5-flash': {
-    id: 'gemini-3-flash',
-    name: 'Gemini 3 Flash',
+    id: 'gemini-3.1-flash-lite',
+    name: 'Gemini 3.1 Flash Lite',
     badge: 'High Stability · Universal',
     description: 'Battle-tested fallback with steady rate limits and minimal latency',
   },
