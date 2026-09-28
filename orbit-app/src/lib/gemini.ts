@@ -19,6 +19,24 @@ export const AI_MODELS = {
     badge: 'High Throughput · Balanced',
     description: 'Balanced performance, low latency fallback during spikes',
   },
+  'gemini-3.5-flash-lite': {
+    id: 'gemini-3.5-flash-lite',
+    name: 'Gemini 3.5 Flash-Lite',
+    badge: 'Lightweight · Zero Spike',
+    description: 'Ultra-lightweight endpoint with maximum RPM quota on the free tier',
+  },
+  'gemini-2.5-flash': {
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    badge: 'Reliable · Free Tier',
+    description: 'Stable price-to-performance ratio for consistent background prompts',
+  },
+  'gemini-2.0-flash': {
+    id: 'gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash',
+    badge: 'High Stability · Universal',
+    description: 'Battle-tested fallback with steady rate limits and minimal latency',
+  },
 } as const;
 
 export type AIModelKey = keyof typeof AI_MODELS;
