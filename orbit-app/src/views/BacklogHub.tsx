@@ -11,7 +11,8 @@ import {
   Search,
   Sparkles
 } from 'lucide-react';
-import { BACKLOG_CHAPTERS, PLAYLIST_LINKS, Chapter } from '../data/manzilPlaylists';
+
+import { BACKLOG_CHAPTERS, PLAYLIST_LINKS, type Chapter } from '../data/manzilPlaylists';
 import { db } from '../db';
 
 type SubjectFilter = 'All' | 'Physics' | 'Mathematics' | 'Physical Chemistry' | 'Organic Chemistry' | 'Inorganic Chemistry';
@@ -154,15 +155,6 @@ export const BacklogHub: React.FC = () => {
       console.error('Failed to add goal:', err);
     }
   };
-
-  const subjectOptions: readonly SubjectFilter[] = [
-    'All',
-    'Physics',
-    'Mathematics',
-    'Physical Chemistry',
-    'Organic Chemistry',
-    'Inorganic Chemistry'
-  ];
 
   const filtered = BACKLOG_CHAPTERS.filter((item) => {
     const matchSub = filter === 'All' || item.subject === filter;
