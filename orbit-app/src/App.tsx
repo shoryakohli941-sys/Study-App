@@ -25,10 +25,10 @@ function App() {
       <Layout
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        onSettingsClick={() => setShowSettings(true)}
+        onRequestSettings={() => setShowSettings(true)}
       >
         {activeTab === 'home' && <Home onNavigate={setActiveTab} />}
-        {activeTab === 'fight' && <FightMode onRequestSettings={() => setShowSettings(true)} />}
+        {activeTab === 'fight' && <FightMode />}
         {activeTab === 'vault' && <WarmupVault />}
         {activeTab === 'calendar' && <Calendar />}
         {activeTab === 'planner' && <Planner />}
