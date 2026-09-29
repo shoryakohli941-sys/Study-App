@@ -1,17 +1,18 @@
-export const processImage = (file: File): Promise<string> => {
+/**
+ * Downscales an image and returns a compressed JPEG base64 data URL.
+ */
+export async function processImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-
-    reader.onload = (event) => {
+    reader.onload = (e) => {
       const img = new Image();
-
       img.onload = () => {
         const MAX_WIDTH = 800;
         let width = img.width;
         let height = img.height;
 
         if (width > MAX_WIDTH) {
-          height = (height * MAX_WIDTH) / width;
+          height = (MAX_WIDTH * height) / width;
           width = MAX_WIDTH;
         }
 
@@ -21,27 +22,20 @@ export const processImage = (file: File): Promise<string> => {
 
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          reject(new Error("Could not get canvas context"));
+          reject(new Error('Failed to get canvas context'));
           return;
         }
 
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Compress to JPEG with quality 0.7
+        // compress to JPEG (quality ~0.7)
         const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
         resolve(dataUrl);
       };
-
-      img.onerror = () => reject(new Error("Failed to load image"));
-
-      if (typeof event.target?.result === 'string') {
-        img.src = event.target.result;
-      } else {
-        reject(new Error("Failed to read file"));
-      }
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = e.target?.result as string;
     };
-
-    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.onerror = () => reject(new Error('Failed to read file'));
     reader.readAsDataURL(file);
   });
-};
+}

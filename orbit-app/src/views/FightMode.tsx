@@ -1,298 +1,277 @@
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  analyzeImage,
-  analyzeText,
-  hasValidApiKey,
-  getSavedAIModel,
-  saveAIModel,
-  AI_MODELS,
-  type AIModelKey,
-  type GeminiResponse,
-} from '../lib/gemini';
-import { HintCard } from '../components/HintCard';
+import { useState, useRef } from 'react';
+import { Camera, Upload, CheckCircle2, Inbox } from 'lucide-react';
+import { analyzeImage, type GeminiResponse } from '../lib/gemini';
+import { processImage } from '../lib/image';
+import { db, type ErrorType } from '../db';
 
-export const FightMode: React.FC = () => {
-  const [selectedModel, setSelectedModel] = useState<AIModelKey>(getSavedAIModel());
-  const [doubtText, setDoubtText] = useState('');
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+export default function FightMode({ apiKey }: { apiKey: string }) {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<GeminiResponse | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [geminiRes, setGeminiRes] = useState<GeminiResponse | null>(null);
 
-  // Practice Timer / Stopwatch
-  const [seconds, setSeconds] = useState(0);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [hintLevel, setHintLevel] = useState(1);
+  const [holdingSolution, setHoldingSolution] = useState(false);
+  const [solutionRevealed, setSolutionRevealed] = useState(false);
+  const holdTimeout = useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (isTimerRunning) {
-      timerRef.current = setInterval(() => {
-        setSeconds((prev) => prev + 1);
-      }, 1000);
-    } else if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isTimerRunning]);
+  const tips = [
+    "Read the question carefully...",
+    "Check the units...",
+    "Draw a clear FBD...",
+    "Is friction static or kinetic?",
+    "Verify the boundary conditions...",
+    "Don't rush the first step!"
+  ];
+  const [tipIndex, setTipIndex] = useState(0);
 
-  const formatTime = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const next = e.target.value as AIModelKey;
-    setSelectedModel(next);
-    saveAIModel(next);
-    setError(null);
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handlePaste = (e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (items) {
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.startsWith('image/')) {
-          const file = items[i].getAsFile();
-          if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              setSelectedImage(reader.result as string);
-            };
-            reader.readAsDataURL(file);
-          }
-          break;
-        }
-      }
-    }
-  };
-
-  const handleSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!hasValidApiKey()) {
-      setError('Gemini API key is not configured. Please add it in settings.');
-      return;
-    }
-
-    if (!doubtText.trim() && !selectedImage) {
-      setError('Please type your question or provide an image to analyze.');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
+    if (!file) return;
 
     try {
-      let result: GeminiResponse;
-      if (selectedImage) {
-        // If image is present, pass doubtText as additional instruction
-        result = await analyzeImage(selectedImage, doubtText.trim() || undefined, undefined, selectedModel);
-      } else {
-        // Direct Ask: No image, pure text doubt
-        result = await analyzeText(doubtText.trim(), selectedModel);
-      }
-      setAnalysisResult(result);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error generating solution';
-      setError(
-        `${msg}. If ${AI_MODELS[selectedModel].name} is experiencing spikes, switch to another model above.`
-      );
-    } finally {
+      const dataUrl = await processImage(file);
+      setImagePreview(dataUrl);
+
+      setLoading(true);
+      setGeminiRes(null);
+      setHintLevel(1);
+      setSolutionRevealed(false);
+
+      const tipInterval = setInterval(() => {
+        setTipIndex((i) => (i + 1) % tips.length);
+      }, 2000);
+
+      const res = await analyzeImage(apiKey, dataUrl);
+      clearInterval(tipInterval);
+      setGeminiRes(res);
+      setLoading(false);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to analyze image. Please try again.');
       setLoading(false);
     }
   };
 
-  const handleReset = () => {
-    setAnalysisResult(null);
-    setSelectedImage(null);
-    setDoubtText('');
-    setError(null);
-    setSeconds(0);
-    setIsTimerRunning(false);
+  const handleHoldStart = () => {
+    setHoldingSolution(true);
+    holdTimeout.current = setTimeout(() => {
+      setSolutionRevealed(true);
+      setHoldingSolution(false);
+    }, 2000);
+  };
+
+  const handleHoldEnd = () => {
+    setHoldingSolution(false);
+    if (holdTimeout.current) {
+      clearTimeout(holdTimeout.current);
+    }
+  };
+
+  const reset = () => {
+    setImagePreview(null);
+    setGeminiRes(null);
+    setHintLevel(1);
+    setSolutionRevealed(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const saveToVault = async (errorType: ErrorType) => {
+    if (!geminiRes || !imagePreview) return;
+    try {
+      await db.mistakes.add({
+        imageData: imagePreview,
+        subject: geminiRes.subject,
+        chapter: geminiRes.chapter,
+        subtopic: geminiRes.subtopic,
+        theTrap: geminiRes.the_trap,
+        keyFormula: geminiRes.key_formula,
+        errorType,
+        nextReviewDate: Date.now() + 86400000,
+        reviewStage: 0,
+        createdAt: Date.now()
+      });
+      alert(`Saved to Error Vault as ${errorType}!`);
+      reset();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save to vault.');
+    }
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6 text-zinc-100" onPaste={handlePaste}>
-      {/* Top Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-zinc-800">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-            <span>Fight Mode</span>
-            <span className="text-xs px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 uppercase font-semibold">
-              Live Arena
-            </span>
-          </h1>
-          <p className="text-sm text-zinc-400">
-            Tackle difficult doubts and exam questions with step-by-step guidance
+    <div className="max-w-2xl mx-auto space-y-6">
+      {!imagePreview && !loading && (
+        <div className="flex flex-col items-center justify-center p-12 bg-slate-900 border border-slate-800 rounded-3xl border-dashed">
+          <div className="w-16 h-16 bg-indigo-500/10 rounded-full flex items-center justify-center mb-6">
+            <Camera className="w-8 h-8 text-indigo-400" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2 text-center">Capture a Problem</h2>
+          <p className="text-sm text-slate-400 text-center mb-8 max-w-sm">
+            Take a photo of a tricky JEE question to get step-by-step Socratic hints.
           </p>
-        </div>
 
-        {/* Controls: Timer & Model Switcher */}
-        <div className="flex items-center gap-3">
-          {/* Practice Timer */}
-          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg text-xs font-mono">
-            <span className="text-zinc-400">⏱ {formatTime(seconds)}</span>
-            <button
-              onClick={() => setIsTimerRunning(!isTimerRunning)}
-              className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300"
-            >
-              {isTimerRunning ? 'Pause' : 'Start'}
-            </button>
-            <button
-              onClick={() => {
-                setIsTimerRunning(false);
-                setSeconds(0);
-              }}
-              className="text-[11px] text-zinc-500 hover:text-zinc-300"
-            >
-              Reset
-            </button>
-          </div>
-
-          {/* Model Switcher */}
-          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <select
-              value={selectedModel}
-              onChange={handleModelChange}
-              className="bg-transparent text-xs font-medium text-white focus:outline-none cursor-pointer"
-            >
-              {Object.entries(AI_MODELS).map(([key, model]) => (
-                <option key={key} value={key} className="bg-zinc-900 text-white">
-                  {model.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Traffic Notice */}
-      {error && (
-        <div className="p-4 bg-amber-950/40 border border-amber-800/60 rounded-xl text-amber-200 text-sm flex items-start justify-between gap-3">
-          <div>
-            <p className="font-semibold text-amber-100">Notice</p>
-            <p className="mt-0.5 text-xs text-amber-300/90">{error}</p>
-          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleCapture}
+            className="hidden"
+          />
           <button
-            onClick={() => setError(null)}
-            className="text-xs text-amber-400 hover:text-amber-200 font-bold px-2 py-1"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-semibold transition"
           >
-            Dismiss
+            <Upload className="w-5 h-5" />
+            Upload / Take Photo
           </button>
         </div>
       )}
 
-      {/* Input Arena (Direct Ask Bar + Optional Image) */}
-      {!analysisResult ? (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4 shadow-xl">
-          <div className="flex items-center justify-between pb-2">
-            <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">
-              Submit Problem or Concept Doubt
-            </h2>
-            <span className="text-xs text-zinc-500">
-              Paste screenshot anytime (Ctrl+V)
-            </span>
-          </div>
-
-          {/* Direct Text Ask Bar */}
-          <div className="relative">
-            <textarea
-              rows={4}
-              value={doubtText}
-              onChange={(e) => setDoubtText(e.target.value)}
-              placeholder="Direct Ask: Type your question, physics formula, math problem, or specific conceptual doubt here... (e.g., 'Why does entropy increase in an isolated system during irreversible expansion?')"
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none font-sans leading-relaxed"
-            />
-          </div>
-
-          {/* Image Preview if attached */}
-          {selectedImage && (
-            <div className="relative inline-block border border-zinc-700 rounded-lg overflow-hidden bg-black max-w-xs">
-              <img
-                src={selectedImage}
-                alt="Problem preview"
-                className="max-h-48 object-contain"
-              />
-              <button
-                type="button"
-                onClick={() => setSelectedImage(null)}
-                className="absolute top-1.5 right-1.5 bg-zinc-900/80 hover:bg-rose-600 text-white rounded-full p-1 text-xs w-6 h-6 flex items-center justify-center transition"
-                title="Remove image"
-              >
-                ✕
-              </button>
-            </div>
+      {loading && (
+        <div className="flex flex-col items-center justify-center p-12 bg-slate-900 border border-slate-800 rounded-3xl">
+          {imagePreview && (
+            <img src={imagePreview} alt="Preview" className="w-32 h-32 object-cover rounded-xl mb-6 opacity-50" />
           )}
+          <div className="w-10 h-10 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mb-6" />
+          <p className="text-indigo-400 font-medium animate-pulse">{tips[tipIndex]}</p>
+        </div>
+      )}
 
-          {/* Action Row */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            <div className="flex items-center gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
+      {geminiRes && !loading && (
+        <div className="space-y-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+            {imagePreview && (
+              <div className="bg-black/50 p-4 border-b border-slate-800 flex justify-center">
+                <img src={imagePreview} alt="Problem" className="max-h-48 object-contain rounded-lg" />
+              </div>
+            )}
+
+            <div className="p-5 sm:p-6 space-y-6">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <span className="px-2.5 py-1 bg-indigo-500/10 text-indigo-400 text-xs font-semibold rounded-md border border-indigo-500/20">
+                  {geminiRes.subject}
+                </span>
+                <span className="px-2.5 py-1 bg-slate-800 text-slate-300 text-xs font-medium rounded-md">
+                  {geminiRes.chapter}
+                </span>
+                <span className="px-2.5 py-1 bg-slate-800 text-slate-300 text-xs font-medium rounded-md">
+                  {geminiRes.subtopic}
+                </span>
+              </div>
+
+              {/* Hint 1 */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Hint 1: The Core Lens</h3>
+                <div className="bg-slate-800/50 border border-slate-700/50 p-4 rounded-xl text-slate-200">
+                  {geminiRes.hint_1_lens}
+                </div>
+              </div>
+
+              {/* Hint 2 */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Hint 2: Setup</h3>
+                {hintLevel >= 2 ? (
+                  <div className="bg-slate-800/50 border border-slate-700/50 p-4 rounded-xl text-slate-200">
+                    {geminiRes.hint_2_setup}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setHintLevel(2)}
+                    className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-semibold transition border border-slate-700"
+                  >
+                    Unlock Hint 2: Setup
+                  </button>
+                )}
+              </div>
+
+              {/* Hint 3 */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Hint 3: The Bottleneck</h3>
+                {hintLevel >= 3 ? (
+                  <div className="bg-slate-800/50 border border-slate-700/50 p-4 rounded-xl text-slate-200">
+                    {geminiRes.hint_3_pivot}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setHintLevel(3)}
+                    disabled={hintLevel < 2}
+                    className="w-full py-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 rounded-xl text-sm font-semibold transition border border-slate-700"
+                  >
+                    Unlock Hint 3: The Bottleneck
+                  </button>
+                )}
+              </div>
+
+              {/* Solution */}
+              {solutionRevealed ? (
+                <div className="space-y-2 mt-8 pt-6 border-t border-slate-800">
+                  <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Full Solution</h3>
+                  <div className="bg-emerald-950/20 border border-emerald-900/50 p-5 rounded-xl text-slate-200 space-y-4">
+                    <div>
+                      <span className="text-xs font-semibold text-emerald-500 block mb-1">Key Formula</span>
+                      <code className="text-emerald-300 font-mono text-sm">{geminiRes.key_formula}</code>
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold text-emerald-500 block mb-1">Solution</span>
+                      <div className="whitespace-pre-wrap text-sm leading-relaxed">{geminiRes.full_solution}</div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="pt-4">
+                  <button
+                    onMouseDown={handleHoldStart}
+                    onMouseUp={handleHoldEnd}
+                    onMouseLeave={handleHoldEnd}
+                    onTouchStart={handleHoldStart}
+                    onTouchEnd={handleHoldEnd}
+                    className={`w-full py-4 rounded-xl text-sm font-bold transition-all relative overflow-hidden ${
+                      holdingSolution ? 'bg-rose-600 text-white scale-[0.98]' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'
+                    }`}
+                  >
+                    <span className="relative z-10">
+                      {holdingSolution ? 'Keep holding...' : 'Hold 2s to Reveal Solution'}
+                    </span>
+                    {holdingSolution && (
+                      <div className="absolute inset-0 bg-rose-500/50 animate-[fill_2s_ease-in-out_forwards]" style={{ transformOrigin: 'left' }} />
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Action Footer */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={reset}
+              className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition"
+            >
+              <CheckCircle2 className="w-5 h-5" />
+              Cracked It! 🎯
+            </button>
+
+            <div className="flex-1 flex gap-2">
               <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 border border-zinc-700 rounded-xl text-xs font-medium flex items-center gap-2 transition"
+                onClick={() => saveToVault('Concept Gap')}
+                className="flex-1 py-3.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition"
               >
-                <span>📷</span>
-                <span>{selectedImage ? 'Change Image' : 'Attach Screenshot'}</span>
+                <Inbox className="w-4 h-4" />
+                Concept Gap
+              </button>
+              <button
+                onClick={() => saveToVault('Silly Slip')}
+                className="flex-1 py-3.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-500/30 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition"
+              >
+                <Inbox className="w-4 h-4" />
+                Silly Slip
               </button>
             </div>
-
-            <button
-              onClick={() => handleSubmit()}
-              disabled={loading || (!doubtText.trim() && !selectedImage)}
-              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition shadow-lg shadow-indigo-600/20 flex items-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Analyzing with {AI_MODELS[selectedModel].name}...</span>
-                </>
-              ) : (
-                <span>Solve Doubt →</span>
-              )}
-            </button>
           </div>
-        </div>
-      ) : (
-        /* HintCard & Result View */
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={handleReset}
-              className="text-xs text-zinc-400 hover:text-white flex items-center gap-1 transition"
-            >
-              ← Ask Another Question
-            </button>
-            <span className="text-xs text-zinc-500 font-mono">
-              Engine: {AI_MODELS[selectedModel].id}
-            </span>
-          </div>
-
-          <HintCard response={analysisResult} onReset={handleReset} />
         </div>
       )}
     </div>
   );
-};
+}

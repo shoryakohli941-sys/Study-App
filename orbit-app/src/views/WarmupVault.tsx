@@ -1,152 +1,171 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
-import { Target, Sigma, RotateCcw, Rocket, CheckCircle2 } from 'lucide-react';
+import { db, type Mistake } from '../db';
+import { Flame, BrainCircuit, Rocket, RotateCw, AlertTriangle, Lightbulb } from 'lucide-react';
 
-export const WarmupVault: React.FC = () => {
-  const currentReviewIndex = 0; // We always show the first due mistake because the array shifts automatically
-  const [isFlipped, setIsFlipped] = useState(false);
+export default function WarmupVault() {
+  const [flipped, setFlipped] = useState(false);
 
-  const dueMistakes = useLiveQuery(
+  // Query due cards: nextReviewDate <= Date.now()
+  const dueCards = useLiveQuery(
     () => db.mistakes.where('nextReviewDate').belowOrEqual(Date.now()).toArray(),
     []
   );
 
-  if (dueMistakes === undefined) {
-    return <div className="flex justify-center py-20 text-zinc-500">Loading vault...</div>;
+  const handleAction = async (mistake: Mistake, action: 'tough' | 'mastered') => {
+    if (!mistake.id) return;
+
+    let newStage = mistake.reviewStage;
+    let nextReviewDate = Date.now();
+
+    if (action === 'tough') {
+      newStage = 0;
+      nextReviewDate = Date.now() + 86400000; // +1 day
+    } else {
+      newStage = Math.min(mistake.reviewStage + 1, 3);
+      if (newStage === 0) nextReviewDate = Date.now() + 86400000; // +1 day
+      else if (newStage === 1) nextReviewDate = Date.now() + (3 * 86400000); // +3 days
+      else if (newStage === 2) nextReviewDate = Date.now() + (7 * 86400000); // +7 days
+      else if (newStage === 3) nextReviewDate = Date.now() + (21 * 86400000); // +21 days
+    }
+
+    try {
+      await db.mistakes.update(mistake.id, {
+        reviewStage: newStage,
+        nextReviewDate
+      });
+      setFlipped(false); // reset for next card
+    } catch (err) {
+      console.error('Failed to update flashcard', err);
+    }
+  };
+
+  if (dueCards === undefined) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="w-8 h-8 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
+      </div>
+    );
   }
 
-  if (dueMistakes.length === 0 || currentReviewIndex >= dueMistakes.length) {
+  if (dueCards.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-        <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center mb-6">
-          <CheckCircle2 className="w-10 h-10 text-white" />
+      <div className="max-w-xl mx-auto flex flex-col items-center justify-center p-12 bg-slate-900 border border-slate-800 rounded-3xl mt-12 shadow-xl">
+        <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mb-6">
+          <Rocket className="w-8 h-8 text-emerald-400" />
         </div>
-        <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">All caught up!</h2>
-        <p className="text-zinc-400 mb-8 max-w-sm">
-          You've completed today's warmup. Back to problem solving.
+        <h2 className="text-xl font-bold text-white mb-2 text-center">All caught up for today!</h2>
+        <p className="text-sm text-slate-400 text-center mb-6 max-w-sm">
+          You've reviewed all your spaced repetition flashcards. Back to problem solving 🚀
         </p>
       </div>
     );
   }
 
-  const currentMistake = dueMistakes[currentReviewIndex];
-  const daysElapsed = Math.floor((Date.now() - currentMistake.createdAt) / 86400000);
-
-  const handleReview = async (quality: 'tough' | 'mastered') => {
-    const intervals = [1, 3, 7, 21]; // stages 0, 1, 2, 3 in days
-
-    let newStage = currentMistake.reviewStage;
-    if (quality === 'mastered') {
-      newStage = Math.min(newStage + 1, 3);
-    } else {
-      newStage = 0;
-    }
-
-    const nextIntervalDays = intervals[newStage];
-    const nextReviewDate = Date.now() + nextIntervalDays * 86400000;
-
-    await db.mistakes.update(currentMistake.id!, {
-      reviewStage: newStage,
-      nextReviewDate
-    });
-
-    setIsFlipped(false);
-    // Do not increment currentReviewIndex here, because the useLiveQuery
-    // will automatically remove the updated item from the dueMistakes array,
-    // shifting the remaining items left.
-  };
+  const card = dueCards[0];
+  const daysElapsed = Math.floor((Date.now() - card.createdAt) / 86400000);
 
   return (
-    <div className="flex flex-col gap-6 h-full pb-8">
-      <div className="flex items-center justify-between">
-        <div className="bg-zinc-900 border border-zinc-800 px-4 py-2 rounded-full flex items-center gap-2">
-          <Rocket className="w-4 h-4 text-white" />
-          <span className="text-xs font-semibold tracking-wider uppercase text-white">
-            Today's Warmup: {dueMistakes.length - currentReviewIndex} Cards Due
+    <div className="max-w-2xl mx-auto space-y-6">
+      {/* Header Badge */}
+      <div className="flex items-center justify-between bg-slate-900/50 border border-slate-800 rounded-xl p-4">
+        <div className="flex items-center gap-3">
+          <div className="bg-orange-500/20 p-2 rounded-lg">
+            <Flame className="w-5 h-5 text-orange-400" />
+          </div>
+          <div>
+            <h3 className="text-white font-bold">Today's Warmup</h3>
+            <p className="text-xs text-slate-400">{dueCards.length} Cards Due</p>
+          </div>
+        </div>
+        <div className="text-right">
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+            Stage {card.reviewStage}
+          </span>
+          <span className="text-xs text-slate-400">
+            {card.errorType}
           </span>
         </div>
       </div>
 
+      {/* Flashcard */}
       <div
-        className={`relative w-full aspect-[4/5] perspective-1000 transition-all duration-500 cursor-pointer ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}
-        style={{ transformStyle: 'preserve-3d' }}
-        onClick={() => !isFlipped && setIsFlipped(true)}
+        className="relative perspective-1000 w-full min-h-[400px] cursor-pointer group"
+        onClick={() => !flipped && setFlipped(true)}
       >
-        {/* Front of card */}
-        <div
-          className="absolute inset-0 bg-black border border-zinc-800 rounded-xl shadow-2xl overflow-hidden backface-hidden flex flex-col"
-          style={{ backfaceVisibility: 'hidden' }}
-        >
-          <div className="relative flex-1 bg-black overflow-hidden border-b border-zinc-800">
-            <img
-              src={currentMistake.imageData}
-              alt="Problem"
-              className="w-full h-full object-contain p-4"
-            />
-            <div className="absolute top-4 right-4 bg-black/80 backdrop-blur-sm px-3 py-1.5 rounded-md border border-zinc-800 text-[10px] font-bold uppercase tracking-wider text-zinc-300">
+        <div className={`w-full h-full min-h-[400px] transition-transform duration-500 transform-style-preserve-3d ${flipped ? 'rotate-y-180' : ''}`}>
+
+          {/* Card Front */}
+          <div className="absolute inset-0 backface-hidden bg-slate-900 border border-slate-800 rounded-2xl shadow-xl flex flex-col items-center justify-center p-6 sm:p-8">
+            <div className="absolute top-4 right-4 text-xs font-semibold text-slate-500">
               Logged {daysElapsed}d ago
             </div>
-          </div>
 
-          <div className="p-6 bg-zinc-950">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-white text-black">
-                {currentMistake.subject}
+            <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
+              <span className="px-3 py-1 bg-indigo-500/10 text-indigo-400 text-xs font-semibold rounded-md border border-indigo-500/20">
+                {card.subject}
               </span>
-              <span className="text-white text-sm font-medium tracking-tight">{currentMistake.chapter}</span>
+              <span className="px-3 py-1 bg-slate-800 text-slate-300 text-xs font-medium rounded-md">
+                {card.chapter}
+              </span>
             </div>
-            <p className="text-zinc-500 text-xs">Tap to reveal the trap and key formula</p>
-          </div>
-        </div>
 
-        {/* Back of card */}
-        <div
-          className="absolute inset-0 bg-black border border-zinc-800 rounded-xl shadow-2xl overflow-hidden flex flex-col p-6 [transform:rotateY(180deg)]"
-          style={{ backfaceVisibility: 'hidden' }}
-        >
-          <div className="flex-1 space-y-6">
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <Target className="w-5 h-5 text-white shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="font-semibold text-white mb-1 uppercase tracking-tight text-sm">The Trap</h3>
-                  <p className="text-zinc-300 text-sm leading-relaxed">{currentMistake.theTrap}</p>
+            {card.imageData && (
+              <div className="bg-black/50 p-2 rounded-xl border border-slate-800 max-w-full">
+                <img src={card.imageData} alt="Problem" className="max-h-56 object-contain rounded-lg shadow-sm" />
+              </div>
+            )}
+
+            <div className="mt-8 flex items-center justify-center gap-2 text-slate-400 group-hover:text-indigo-400 transition">
+              <BrainCircuit className="w-5 h-5" />
+              <span className="text-sm font-semibold">Tap to Reveal Trap & Formula</span>
+            </div>
+          </div>
+
+          {/* Card Back */}
+          <div className="absolute inset-0 backface-hidden rotate-y-180 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl flex flex-col p-6 sm:p-8">
+            <div className="flex-1 space-y-6">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-rose-400">
+                  <AlertTriangle className="w-5 h-5" />
+                  <h3 className="text-sm font-bold uppercase tracking-wider">The Trap</h3>
+                </div>
+                <div className="bg-rose-950/20 border border-rose-900/50 p-4 rounded-xl text-rose-200/90 text-sm leading-relaxed">
+                  {card.theTrap}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-emerald-400">
+                  <Lightbulb className="w-5 h-5" />
+                  <h3 className="text-sm font-bold uppercase tracking-wider">Key Formula / Condition</h3>
+                </div>
+                <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl text-emerald-300 font-mono text-sm">
+                  {card.keyFormula}
                 </div>
               </div>
             </div>
 
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <Sigma className="w-5 h-5 text-white shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="font-semibold text-white mb-2 uppercase tracking-tight text-sm">Key Formula / Setup</h3>
-                  <p className="text-zinc-300 text-sm font-mono bg-black p-3 rounded-md border border-zinc-800">
-                    {currentMistake.keyFormula}
-                  </p>
-                </div>
-              </div>
+            {/* Actions */}
+            <div className="grid grid-cols-2 gap-3 mt-6 pt-6 border-t border-slate-800">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleAction(card, 'tough'); }}
+                className="py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold flex items-center justify-center gap-2 transition"
+              >
+                <RotateCw className="w-4 h-4" />
+                Still Tough 🔄
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleAction(card, 'mastered'); }}
+                className="py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition shadow-lg shadow-indigo-500/20"
+              >
+                <Rocket className="w-4 h-4" />
+                Mastered 🚀
+              </button>
             </div>
-          </div>
-
-          <div className="pt-6 border-t border-zinc-800 flex gap-4 mt-auto">
-            <button
-              onClick={(e) => { e.stopPropagation(); handleReview('tough'); }}
-              className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 border border-zinc-800"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Still Tough
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleReview('mastered'); }}
-              className="flex-1 py-3 bg-white hover:bg-zinc-200 text-black rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
-            >
-              <Rocket className="w-4 h-4" />
-              Mastered
-            </button>
           </div>
         </div>
       </div>
     </div>
   );
-};
+}

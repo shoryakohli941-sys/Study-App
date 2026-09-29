@@ -1,128 +1,69 @@
-import React, { useState, useEffect } from 'react';
-import { Key, CheckCircle2, X } from 'lucide-react';
-import { getApiKey, setApiKey } from '../lib/gemini';
+import { useState, useEffect } from 'react';
+import { Settings, Save, X } from 'lucide-react';
 
 interface ApiKeyModalProps {
-  isOpen: boolean;
   onClose: () => void;
+  onSave: (key: string) => void;
 }
 
-export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose }) => {
-  const [keyInput, setKeyInput] = useState('');
-  const [error, setError] = useState('');
+export function ApiKeyModal({ onClose, onSave }: ApiKeyModalProps) {
+  const [apiKey, setApiKey] = useState('');
 
   useEffect(() => {
-    if (isOpen) {
-      setKeyInput(getApiKey());
-      setError('');
-    }
-  }, [isOpen]);
+    const savedKey = localStorage.getItem('orbit_gemini_api_key') || import.meta.env.VITE_GEMINI_API_KEY || '';
+    setApiKey(savedKey);
+  }, []);
 
-  if (!isOpen) return null;
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    const clean = keyInput.trim();
-    if (!clean) {
-      setError('Please enter a valid Gemini API key.');
-      return;
-    }
-    setApiKey(clean);
-    setError('');
+  const handleSave = () => {
+    localStorage.setItem('orbit_gemini_api_key', apiKey.trim());
+    onSave(apiKey.trim());
     onClose();
   };
 
-  const hasSavedKey = Boolean(getApiKey());
-
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm"
-      onClick={() => {
-        if (hasSavedKey) onClose();
-      }}
-    >
-      <div 
-        className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-xl p-6 shadow-2xl space-y-5"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-zinc-900 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg">
-              <Key className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-white tracking-tight">
-                Gemini API Key
-              </h3>
-              <p className="text-[11px] text-zinc-400 font-mono">
-                Stored permanently on this device
-              </p>
-            </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-400 hover:text-white"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        <div className="mb-6">
+          <div className="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center mb-4">
+            <Settings className="w-6 h-6 text-indigo-400" />
           </div>
-          {hasSavedKey && (
-            <button 
-              onClick={onClose}
-              className="text-zinc-500 hover:text-white transition-colors"
-              type="button"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+          <h2 className="text-xl font-bold text-white mb-2">API Key Setup</h2>
+          <p className="text-sm text-slate-400 leading-relaxed">
+            Orbit uses Google's Gemini AI to generate Socratic hints. Please enter your Gemini API key to continue.
+          </p>
         </div>
 
-        <form onSubmit={handleSave} className="space-y-4 font-mono">
+        <div className="space-y-4">
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-zinc-400 mb-1.5">
-              Google AI Studio Key
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
+              Gemini API Key
             </label>
             <input
               type="password"
-              value={keyInput}
-              onChange={(e) => {
-                setKeyInput(e.target.value);
-                if (error) setError('');
-              }}
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
               placeholder="AIzaSy..."
-              className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors"
-              autoFocus
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
             />
-            {error && (
-              <p className="text-[11px] text-red-400 mt-1.5 font-sans">{error}</p>
-            )}
           </div>
-
-          <div className="flex items-center justify-between text-[11px] text-zinc-500 font-sans">
-            <span>Stored in device localStorage</span>
-            <a
-              href="https://aistudio.google.com/app/apikey"
-              target="_blank"
-              rel="noreferrer"
-              className="text-zinc-300 underline hover:text-white"
-            >
-              Get free key ↗
-            </a>
-          </div>
-
-          <div className="flex items-center gap-2 pt-1 font-sans">
-            {hasSavedKey && (
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 py-2 rounded-lg border border-zinc-800 text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
-              >
-                Keep Existing
-              </button>
-            )}
-            <button
-              type="submit"
-              className="flex-1 py-2 rounded-lg bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors flex items-center justify-center gap-1.5"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Save Key
-            </button>
-          </div>
-        </form>
+          <button
+            onClick={handleSave}
+            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-3 font-semibold transition flex items-center justify-center gap-2"
+          >
+            <Save className="w-4 h-4" />
+            Save Configuration
+          </button>
+          <p className="text-center text-xs text-slate-500">
+            Keys are stored locally in your browser.
+          </p>
+        </div>
       </div>
     </div>
   );
-};
+}
