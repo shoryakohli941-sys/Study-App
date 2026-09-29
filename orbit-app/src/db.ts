@@ -1,153 +1,31 @@
 import Dexie, { type Table } from 'dexie';
 
+export type Subject = 'Physics' | 'Chemistry' | 'Mathematics';
+export type ErrorType = 'Concept Gap' | 'Silly Slip';
+
 export interface Mistake {
   id?: number;
-  imageData: string;
-  subject: "Physics" | "Chemistry" | "Mathematics";
+  imageData: string; // compressed base64 data URL
+  subject: Subject;
   chapter: string;
   subtopic: string;
   theTrap: string;
   keyFormula: string;
-  errorType: "Concept Gap" | "Silly Slip";
+  errorType: ErrorType;
   nextReviewDate: number;
   reviewStage: number; // 0, 1, 2, 3
   createdAt: number;
 }
 
-export interface ScoreData {
-  physics: { plus: number; minus: number };
-  chemistry: { plus: number; minus: number };
-  mathematics: { plus: number; minus: number };
-}
-
-export interface CalendarEvent {
-  id?: number;
-  date: string; // YYYY-MM-DD
-  title: string;
-  category: 'Mock Test' | 'Study Block / Revision' | 'Coaching Class' | 'School / Holiday' | 'Goal / Milestone' | 'General';
-  isAllDay: boolean;
-  startTime?: string;
-  endTime?: string;
-  details?: string;
-  scoreData?: ScoreData;
-  createdAt: number;
-}
-
-export interface PlannerTask {
-  id?: number;
-  date: string; // YYYY-MM-DD
-  title: string;
-  subject: "Physics" | "Chemistry" | "Mathematics" | "General";
-  completed: boolean;
-  priority: number;
-  createdAt: number;
-}
-
-export interface FocusSession {
-  id?: number;
-  date: string; // YYYY-MM-DD
-  durationMinutes: number;
-  createdAt: number;
-}
-
-export interface UserSettings {
-  id?: number;
-  targetExamName: string;
-  targetExamDate: string; // YYYY-MM-DD
-  geminiApiKey: string;
-}
-
-export interface LectureProgress {
-  id?: number;
-  videoId: string;
-  completed: boolean;
-  subject: string;
-  updatedAt: number;
-}
-
-export interface CustomLecture {
-  id?: number;
-  subject: string;
-  chapter: string;
-  videoId: string;
-  createdAt: number;
-}
-
-export class OrbitDatabase extends Dexie {
+export class OrbitDB extends Dexie {
   mistakes!: Table<Mistake>;
-  calendarEvents!: Table<CalendarEvent>;
-  plannerTasks!: Table<PlannerTask>;
-  focusSessions!: Table<FocusSession>;
-  userSettings!: Table<UserSettings>;
-  lectureProgress!: Table<LectureProgress>;
-  customLectures!: Table<CustomLecture>;
 
   constructor() {
     super('OrbitDB');
     this.version(1).stores({
       mistakes: '++id, subject, chapter, subtopic, errorType, nextReviewDate, reviewStage, createdAt'
     });
-    this.version(2).stores({
-      mistakes: '++id, subject, chapter, subtopic, errorType, nextReviewDate, reviewStage, createdAt',
-      calendarEvents: '++id, date, title, category, details, scoreData, createdAt',
-      plannerTasks: '++id, date, title, subject, completed, priority, createdAt'
-    });
-    this.version(3).stores({
-      mistakes: '++id, subject, chapter, subtopic, errorType, nextReviewDate, reviewStage, createdAt',
-      calendarEvents: '++id, date, title, category, isAllDay, startTime, endTime, details, scoreData, createdAt',
-      plannerTasks: '++id, date, title, subject, completed, priority, createdAt'
-    }).upgrade(tx => {
-      return tx.table("calendarEvents").toCollection().modify(event => {
-        if (event.isAllDay === undefined) {
-          event.isAllDay = true;
-        }
-        if (event.category === 'Coaching / Class') event.category = 'Coaching Class';
-        if (event.category === 'School Holiday') event.category = 'School / Holiday';
-        if (event.category === 'Revision Target') event.category = 'Study Block / Revision';
-      });
-    });
-    this.version(4).stores({
-      mistakes: '++id, subject, chapter, subtopic, errorType, nextReviewDate, reviewStage, createdAt',
-      calendarEvents: '++id, date, title, category, isAllDay, startTime, endTime, details, scoreData, createdAt',
-      plannerTasks: '++id, date, title, subject, completed, priority, createdAt',
-      focusSessions: '++id, date, durationMinutes, createdAt',
-      userSettings: '++id, targetExamName, targetExamDate'
-    });
-    this.version(5).stores({
-      mistakes: '++id, subject, chapter, subtopic, errorType, nextReviewDate, reviewStage, createdAt',
-      calendarEvents: '++id, date, title, category, isAllDay, startTime, endTime, details, scoreData, createdAt',
-      plannerTasks: '++id, date, title, subject, completed, priority, createdAt',
-      focusSessions: '++id, date, durationMinutes, createdAt',
-      userSettings: '++id, targetExamName, targetExamDate',
-      lectureProgress: '++id, videoId, subject, completed, updatedAt'
-    });
-    this.version(6).stores({
-      mistakes: '++id, subject, chapter, subtopic, errorType, nextReviewDate, reviewStage, createdAt',
-      calendarEvents: '++id, date, title, category, isAllDay, startTime, endTime, details, scoreData, createdAt',
-      plannerTasks: '++id, date, title, subject, completed, priority, createdAt',
-      focusSessions: '++id, date, durationMinutes, createdAt',
-      userSettings: '++id, targetExamName, targetExamDate',
-      lectureProgress: '++id, videoId, subject, completed, updatedAt',
-      customLectures: '++id, subject, chapter, videoId, createdAt'
-    });
   }
 }
 
-export const db = new OrbitDatabase();
-
-// Seed data for immediate demonstration
-db.on('populate', () => {
-  db.mistakes.add({
-    // A tiny transparent 1x1 gif data URL just for the sample if no image is available
-    imageData: "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==",
-    subject: "Physics",
-    chapter: "Rotational Mechanics",
-    subtopic: "Rolling Friction",
-    theTrap: "Assuming static friction does no work in pure rolling, but forgetting that sliding friction DOES dissipate energy when rolling with slipping.",
-    keyFormula: "v = ωR (pure rolling condition)",
-    errorType: "Concept Gap",
-    nextReviewDate: Date.now() - 1000, // Make it due immediately
-    reviewStage: 0,
-    createdAt: Date.now() - 86400000, // Created 1 day ago
-  });
-});
+export const db = new OrbitDB();
