@@ -34,16 +34,25 @@ export const WarmupVault: React.FC = () => {
   const daysElapsed = Math.floor((Date.now() - currentMistake.createdAt) / 86400000);
 
   const handleReview = async (quality: 'tough' | 'mastered') => {
-    const intervals = [1, 3, 7, 21]; // stages 0, 1, 2, 3 in days
+    let newStage = currentMistake.reviewStage || 0;
+    let nextIntervalDays = 1;
 
-    let newStage = currentMistake.reviewStage;
     if (quality === 'mastered') {
-      newStage = Math.min(newStage + 1, 3);
+      if (newStage === 0) {
+        nextIntervalDays = 3;
+        newStage = 1;
+      } else if (newStage === 1) {
+        nextIntervalDays = 7;
+        newStage = 2;
+      } else if (newStage >= 2) {
+        nextIntervalDays = 21;
+        newStage = 3;
+      }
     } else {
       newStage = 0;
+      nextIntervalDays = 1;
     }
 
-    const nextIntervalDays = intervals[newStage];
     const nextReviewDate = Date.now() + nextIntervalDays * 86400000;
 
     await db.mistakes.update(currentMistake.id!, {

@@ -51,14 +51,38 @@ export const FightMode: React.FC = () => {
     setError(null);
   };
 
+  const processImageFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > 800) {
+          height = Math.round((height * 800) / width);
+          width = 800;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          setSelectedImage(dataUrl);
+        }
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      processImageFile(file);
     }
   };
 
@@ -69,11 +93,7 @@ export const FightMode: React.FC = () => {
         if (items[i].type.startsWith('image/')) {
           const file = items[i].getAsFile();
           if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              setSelectedImage(reader.result as string);
-            };
-            reader.readAsDataURL(file);
+            processImageFile(file);
           }
           break;
         }
@@ -290,7 +310,7 @@ export const FightMode: React.FC = () => {
             </span>
           </div>
 
-          <HintCard response={analysisResult} onReset={handleReset} />
+          <HintCard response={analysisResult} onReset={handleReset} imageData={selectedImage || undefined} />
         </div>
       )}
     </div>
