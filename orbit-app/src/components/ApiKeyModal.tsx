@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Key, CheckCircle2, X } from 'lucide-react';
 import { getApiKey, setApiKey } from '../lib/gemini';
 
@@ -8,15 +8,8 @@ interface ApiKeyModalProps {
 }
 
 export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose }) => {
-  const [keyInput, setKeyInput] = useState('');
+  const [keyInput, setKeyInput] = useState(getApiKey());
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (isOpen) {
-      setKeyInput(getApiKey());
-      setError('');
-    }
-  }, [isOpen]);
 
   if (!isOpen) return null;
 
