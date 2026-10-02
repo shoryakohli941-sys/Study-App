@@ -1,66 +1,37 @@
-// Polyfill NodeJS namespace for browser environments (resolves NodeJS.Timeout TS error)
-declare global {
-  namespace NodeJS {
-    type Timeout = any;
-  }
-}
+import { GoogleGenAI } from '@google/genai';
 
 // Handpicked credit-efficient Flash models from Google AI Studio
 export const AI_MODELS = {
-  'gemini-3.8-flash': {
-    id: 'gemini-3.8-flash',
-    name: 'Gemini 3.8 Flash',
-    badge: 'Ultra Fast · Minimal Credits',
+  'gemini-2.5-flash': {
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    badge: 'Fast & Smart',
     description: 'Fastest reasoning with lowest credit consumption',
   },
-  'gemini-3.7-flash': {
-    id: 'gemini-3.7-flash',
-    name: 'Gemini 3.7 Flash',
-    badge: 'High Throughput · Balanced',
-    description: 'Balanced performance, low latency fallback during spikes',
-  },
-  'gemini-3.5-flash-lite': {
-    id: 'gemini-3.5-flash-lite',
-    name: 'Gemini 3.5 Flash-Lite',
-    badge: 'Lightweight · Zero Spike',
-    description: 'Ultra-lightweight endpoint with maximum RPM quota on the free tier',
-  },
-  'gemini-3.6-flash': {
-    id: 'gemini-3.6-flash',
-    name: 'Gemini 3.6 Flash',
-    badge: 'Reliable · Free Tier',
-    description: 'Stable price-to-performance ratio for consistent background prompts',
-  },
-  'gemini-3.5-flash': {
-    id: 'gemini-3.1-flash-lite',
-    name: 'Gemini 3.1 Flash Lite',
-    badge: 'High Stability · Universal',
-    description: 'Battle-tested fallback with steady rate limits and minimal latency',
+  'gemini-1.5-flash': {
+    id: 'gemini-1.5-flash',
+    name: 'Gemini 1.5 Flash',
+    badge: 'Reliable Fallback',
+    description: 'Balanced performance, low latency fallback',
   },
 } as const;
 
 export type AIModelKey = keyof typeof AI_MODELS;
-export const DEFAULT_AI_MODEL: AIModelKey = 'gemini-3.8-flash';
+export const DEFAULT_AI_MODEL: AIModelKey = 'gemini-2.5-flash';
 
 const MODEL_STORAGE_KEY = 'orbit_selected_ai_model';
 const API_KEY_STORAGE = 'orbit_gemini_api_key';
 
-// Strictly typed without optional 'undefined' to satisfy strictNullChecks in HintCard
 export interface GeminiResponse {
-  answer: string;
-  solution: string;
-  explanation: string;
-  hints: string[];
-  steps: string[];
-  topic: string;
+  subject: "Physics" | "Chemistry" | "Mathematics";
+  chapter: string;
   subtopic: string;
-  difficulty: string;
-  concepts: string[];
-  rawText: string;
-  question: string;
-  title: string;
-  keyFormula: string;
-  [key: string]: any;
+  the_trap: string;
+  hint_1_lens: string;
+  hint_2_setup: string;
+  hint_3_pivot: string;
+  key_formula: string;
+  full_solution: string;
 }
 
 export function getApiKey(): string {
@@ -108,81 +79,64 @@ export function saveAIModel(modelKey: AIModelKey): void {
   }
 }
 
-async function callGeminiApi(
-  body: Record<string, any>,
-  modelKey: AIModelKey = getSavedAIModel()
-): Promise<string> {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error('Gemini API Key missing. Please provide your key in settings.');
+const SYSTEM_INSTRUCTION = `You are an elite JEE Advanced Socratic mentor. Analyze the question image and return structured JSON matching:
+{
+  "subject": "Physics" | "Chemistry" | "Mathematics",
+  "chapter": "string",
+  "subtopic": "string",
+  "the_trap": "1-sentence warning of where students miscalculate or pick the wrong approach",
+  "hint_1_lens": "Fundamental governing principle or reference frame (NO equations)",
+  "hint_2_setup": "First step equation, constraint relation, or FBD setup",
+  "hint_3_pivot": "The algebraic or conceptual bottleneck",
+  "key_formula": "Critical formula or condition in standard text format",
+  "full_solution": "Concise step-by-step resolution"
+}`;
+
+function sanitizeJsonString(rawString: string): string {
+  // Remove markdown code fences if they exist
+  let sanitized = rawString.trim();
+  if (sanitized.startsWith('```json')) {
+    sanitized = sanitized.substring(7);
+  } else if (sanitized.startsWith('```')) {
+    sanitized = sanitized.substring(3);
   }
 
-  const modelId = AI_MODELS[modelKey]?.id || AI_MODELS[DEFAULT_AI_MODEL].id;
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
-
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => null);
-    const msg = errorData?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
-    throw new Error(msg);
+  if (sanitized.endsWith('```')) {
+    sanitized = sanitized.substring(0, sanitized.length - 3);
   }
 
-  const data = await response.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  return text;
+  return sanitized.trim();
 }
 
-function parseGeminiJson(rawText: string, defaultTopic = 'General Doubt'): GeminiResponse {
-  let parsed: GeminiResponse = {
-    answer: rawText,
-    solution: rawText,
-    explanation: rawText,
-    hints: [rawText],
-    steps: [rawText],
-    topic: defaultTopic,
-    subtopic: 'Concept Analysis',
-    difficulty: 'Medium',
-    concepts: [],
-    rawText: rawText,
-    question: '',
-    title: defaultTopic,
-    keyFormula: '',
-  };
-
+function parseGeminiJson(rawText: string): GeminiResponse {
   try {
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const jsonParsed = JSON.parse(jsonMatch[0]);
-      parsed = {
-        ...parsed,
-        ...jsonParsed,
-        answer: jsonParsed.answer || parsed.answer,
-        solution: jsonParsed.solution || parsed.solution,
-        explanation: jsonParsed.explanation || parsed.explanation,
-        hints: Array.isArray(jsonParsed.hints)
-          ? jsonParsed.hints
-          : [jsonParsed.hints || rawText],
-        steps: Array.isArray(jsonParsed.steps)
-          ? jsonParsed.steps
-          : [jsonParsed.steps || rawText],
-        concepts: Array.isArray(jsonParsed.concepts) ? jsonParsed.concepts : [],
-        keyFormula: jsonParsed.keyFormula || '',
-        title: jsonParsed.title || parsed.title,
-        question: jsonParsed.question || parsed.question,
-      };
-    }
-  } catch {
-    // Keep fallback plain-text structure
+    const sanitized = sanitizeJsonString(rawText);
+    const parsed = JSON.parse(sanitized);
+    return {
+      subject: parsed.subject || "Physics",
+      chapter: parsed.chapter || "General",
+      subtopic: parsed.subtopic || "Concept Analysis",
+      the_trap: parsed.the_trap || "",
+      hint_1_lens: parsed.hint_1_lens || "",
+      hint_2_setup: parsed.hint_2_setup || "",
+      hint_3_pivot: parsed.hint_3_pivot || "",
+      key_formula: parsed.key_formula || "",
+      full_solution: parsed.full_solution || rawText,
+    };
+  } catch (e) {
+    console.error("Failed to parse Gemini response as JSON:", rawText);
+    return {
+      subject: "Physics",
+      chapter: "Error parsing response",
+      subtopic: "Concept Analysis",
+      the_trap: "",
+      hint_1_lens: "",
+      hint_2_setup: "",
+      hint_3_pivot: "",
+      key_formula: "",
+      full_solution: rawText,
+    };
   }
-
-  return parsed;
 }
 
 // Direct Text / Doubt Analysis (No image required)
@@ -190,121 +144,68 @@ export async function analyzeText(
   doubtText: string,
   modelKey: AIModelKey = getSavedAIModel()
 ): Promise<GeminiResponse> {
-  const prompt = `You are a precision STEM exam tutor and conceptual problem-solving coach.
-Analyze this student's specific doubt or problem statement:
-"""
-${doubtText}
-"""
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error('Gemini API Key missing. Please provide your key in settings.');
+  }
 
-Return a strictly valid JSON object (no markdown wrapping) containing:
-{
-  "title": "Short descriptive title of the concept/problem",
-  "question": "${doubtText.replace(/"/g, "'").slice(0, 150)}",
-  "topic": "Physics/Chemistry/Math/Biology topic name",
-  "subtopic": "Specific subtopic",
-  "difficulty": "Easy" | "Medium" | "Hard",
-  "hints": ["Hint 1: Conceptual clue", "Hint 2: Relevant equation/property", "Hint 3: Execution direction"],
-  "steps": ["Step 1 breakdown", "Step 2 breakdown", "Step 3 final resolution"],
-  "answer": "Final concise answer or core conclusion",
-  "solution": "Complete step-by-step rigorous solution and logic",
-  "explanation": "Why this approach works and what mistake students commonly make here",
-  "concepts": ["Key Concept 1", "Key Concept 2"],
-  "keyFormula": "Primary formula or governing law"
-}`;
+  const ai = new GoogleGenAI({ apiKey });
+  const modelId = AI_MODELS[modelKey]?.id || AI_MODELS[DEFAULT_AI_MODEL].id;
 
-  const text = await callGeminiApi(
-    {
-      contents: [
-        {
-          parts: [{ text: prompt }],
-        },
-      ],
-    },
-    modelKey
-  );
+  const response = await ai.models.generateContent({
+    model: modelId,
+    contents: doubtText,
+    config: {
+      systemInstruction: SYSTEM_INSTRUCTION,
+      responseMimeType: "application/json",
+    }
+  });
 
-  return parseGeminiJson(text, 'Text Doubt');
+  return parseGeminiJson(response.text || "");
 }
 
 // Image Analysis with optional accompanying text prompt
 export async function analyzeImage(
   imageData: string,
   arg2?: string,
-  arg3?: string,
+  _arg3?: string,
   modelKey: AIModelKey = getSavedAIModel()
 ): Promise<GeminiResponse> {
   let mimeType = 'image/jpeg';
   let base64Data = imageData;
 
-  if (imageData.startsWith('data:')) {
-    const parts = imageData.split(',');
-    const mimeMatch = parts[0].match(/:(.*?);/);
-    if (mimeMatch) {
-      mimeType = mimeMatch[1];
-    }
-    base64Data = parts[1] || '';
+  // Ensure data URL prefix is stripped before sending to the Gemini SDK
+  const dataUrlPrefixMatch = imageData.match(/^data:image\/[a-z]+;base64,/);
+  if (dataUrlPrefixMatch) {
+    mimeType = imageData.substring(5, imageData.indexOf(';')); // e.g. image/jpeg
+    base64Data = imageData.substring(imageData.indexOf(',') + 1);
   }
 
-  let prompt = `Analyze this problem image. Return a strictly valid JSON object with keys:
-"title", "question", "topic", "subtopic", "difficulty", "hints" (array of progressive strings), "steps" (array of strings), "answer", "solution", "explanation", "concepts" (array), "keyFormula".`;
-
-  if (arg2) {
-    if (arg2.includes('/')) {
-      mimeType = arg2;
-      if (arg3) prompt = arg3;
-    } else {
-      prompt = `${prompt}\nAdditional student note: ${arg2}`;
-    }
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error('Gemini API Key missing. Please provide your key in settings.');
   }
 
-  const text = await callGeminiApi(
-    {
-      contents: [
-        {
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType,
-                data: base64Data,
-              },
-            },
-          ],
-        },
-      ],
-    },
-    modelKey
-  );
+  const ai = new GoogleGenAI({ apiKey });
+  const modelId = AI_MODELS[modelKey]?.id || AI_MODELS[DEFAULT_AI_MODEL].id;
 
-  return parseGeminiJson(text, 'Problem Breakdown');
-}
+  let textPrompt = arg2 || "Analyze this problem image.";
 
-export async function generateStudyPlan(
-  topic: string,
-  subject: string,
-  modelKey: AIModelKey = getSavedAIModel()
-): Promise<string> {
-  const prompt = `You are a high-yield study strategist for competitive exams.
-Break down this backlog topic into an actionable, prioritized roadmap:
-- Subject: ${subject}
-- Backlog Chapter/Topic: ${topic}
+  const response = await ai.models.generateContent({
+    model: modelId,
+    contents: [
+      {
+        parts: [
+          { inlineData: { data: base64Data, mimeType } },
+          { text: textPrompt }
+        ]
+      }
+    ],
+    config: {
+      systemInstruction: SYSTEM_INSTRUCTION,
+      responseMimeType: "application/json",
+    }
+  });
 
-Provide:
-1. Core Prerequisite concepts to review first (max 3 bullets).
-2. High-Yield Subtopics ranked by exam weightage.
-3. 3-Phase Study Plan (Theory -> Problem Solving -> Error Review).
-4. Estimated time required (in hours) and common pitfalls to avoid.
-
-Keep it concise, actionable, and formatted in clean Markdown.`;
-
-  return callGeminiApi(
-    {
-      contents: [
-        {
-          parts: [{ text: prompt }],
-        },
-      ],
-    },
-    modelKey
-  );
+  return parseGeminiJson(response.text || "");
 }
