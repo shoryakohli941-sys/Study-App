@@ -2,33 +2,41 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   analyzeImage,
   analyzeText,
-  hasValidApiKey,
-  getSavedAIModel,
-  saveAIModel,
   AI_MODELS,
   type AIModelKey,
   type GeminiResponse,
+  hasValidApiKey,
+  getSavedAIModel,
+  saveAIModel,
 } from '../lib/gemini';
 import { HintCard } from '../components/HintCard';
+import { compressImage } from '../lib/imageUtils';
+import { db } from '../db';
+import { CheckCircle2, ChevronDown } from 'lucide-react';
 
 export const FightMode: React.FC = () => {
-  const [selectedModel, setSelectedModel] = useState<AIModelKey>(getSavedAIModel());
   const [doubtText, setDoubtText] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<GeminiResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<AIModelKey>(getSavedAIModel());
 
-  // Practice Timer / Stopwatch
+  // Timer state
   const [seconds, setSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Vault saving state
+  const [showVaultPicker, setShowVaultPicker] = useState(false);
+  const [saveToast, setSaveToast] = useState(false);
 
   useEffect(() => {
     if (isTimerRunning) {
       timerRef.current = setInterval(() => {
-        setSeconds((prev) => prev + 1);
+        setSeconds((s) => s + 1);
       }, 1000);
     } else if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -51,29 +59,31 @@ export const FightMode: React.FC = () => {
     setError(null);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressedDataUrl = await compressImage(file, 800, 0.7);
+        setSelectedImage(compressedDataUrl);
+      } catch (err) {
+        setError("Failed to compress image.");
+      }
     }
   };
 
-  const handlePaste = (e: React.ClipboardEvent) => {
+  const handlePaste = async (e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (items) {
       for (let i = 0; i < items.length; i++) {
         if (items[i].type.startsWith('image/')) {
           const file = items[i].getAsFile();
           if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              setSelectedImage(reader.result as string);
-            };
-            reader.readAsDataURL(file);
+            try {
+              const compressedDataUrl = await compressImage(file, 800, 0.7);
+              setSelectedImage(compressedDataUrl);
+            } catch (err) {
+              setError("Failed to compress pasted image.");
+            }
           }
           break;
         }
@@ -84,7 +94,8 @@ export const FightMode: React.FC = () => {
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!hasValidApiKey()) {
-      setError('Gemini API key is not configured. Please add it in settings.');
+      // The modal should pop up from App.tsx on its own, but just in case:
+      setError('Gemini API key is not configured. Please add it via the Settings icon (top right).');
       return;
     }
 
@@ -123,6 +134,32 @@ export const FightMode: React.FC = () => {
     setError(null);
     setSeconds(0);
     setIsTimerRunning(false);
+    setShowVaultPicker(false);
+    setSaveToast(false);
+  };
+
+  const handleSaveToVault = async (errorType: "Concept Gap" | "Silly Slip") => {
+    if (!analysisResult) return;
+
+    // Provide a tiny transparent gif fallback if no image is available
+    const imgData = selectedImage || "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==";
+
+    await db.mistakes.add({
+      imageData: imgData,
+      subject: analysisResult.subject,
+      chapter: analysisResult.chapter,
+      subtopic: analysisResult.subtopic,
+      theTrap: analysisResult.the_trap,
+      keyFormula: analysisResult.key_formula,
+      errorType: errorType,
+      nextReviewDate: Date.now() + 86400000, // +1 day
+      reviewStage: 0,
+      createdAt: Date.now(),
+    });
+
+    setShowVaultPicker(false);
+    setSaveToast(true);
+    setTimeout(() => setSaveToast(false), 3000);
   };
 
   return (
@@ -198,7 +235,7 @@ export const FightMode: React.FC = () => {
       )}
 
       {/* Input Arena (Direct Ask Bar + Optional Image) */}
-      {!analysisResult ? (
+      {!analysisResult && !loading ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4 shadow-xl">
           <div className="flex items-center justify-between pb-2">
             <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">
@@ -246,6 +283,7 @@ export const FightMode: React.FC = () => {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                capture="environment"
                 onChange={handleImageUpload}
                 className="hidden"
               />
@@ -264,15 +302,16 @@ export const FightMode: React.FC = () => {
               disabled={loading || (!doubtText.trim() && !selectedImage)}
               className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition shadow-lg shadow-indigo-600/20 flex items-center gap-2"
             >
-              {loading ? (
-                <>
-                  <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Analyzing with {AI_MODELS[selectedModel].name}...</span>
-                </>
-              ) : (
-                <span>Solve Doubt →</span>
-              )}
+              <span>Solve Doubt →</span>
             </button>
+          </div>
+        </div>
+      ) : loading ? (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 flex flex-col items-center justify-center space-y-4 shadow-xl">
+          <span className="w-8 h-8 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+          <p className="text-indigo-400 font-semibold mt-4 text-sm">Analyzing with {AI_MODELS[selectedModel].name}...</p>
+          <div className="text-zinc-500 text-xs italic mt-2 max-w-sm text-center">
+             "Encouraging JEE micro-tip: Precision over speed. Check your units and sign conventions before proceeding."
           </div>
         </div>
       ) : (
@@ -290,7 +329,51 @@ export const FightMode: React.FC = () => {
             </span>
           </div>
 
-          <HintCard response={analysisResult} onReset={handleReset} />
+          <HintCard response={analysisResult || undefined} />
+
+          {/* Bottom Actions */}
+          <div className="flex items-center gap-3 mt-4">
+            <button
+              onClick={handleReset}
+              className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-sm font-semibold transition shadow-lg border border-zinc-700"
+            >
+              Cracked It! 🎯
+            </button>
+
+            <div className="relative flex-1">
+              <button
+                onClick={() => setShowVaultPicker(!showVaultPicker)}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold transition shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2"
+              >
+                Add to Error Vault 📥
+                <ChevronDown className={`w-4 h-4 transition-transform ${showVaultPicker ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showVaultPicker && (
+                <div className="absolute bottom-full left-0 right-0 mb-2 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-2 z-10 flex flex-col gap-1">
+                  <button
+                    onClick={() => handleSaveToVault("Concept Gap")}
+                    className="w-full text-left px-4 py-3 hover:bg-zinc-800 rounded-lg text-sm text-amber-400 font-medium transition-colors"
+                  >
+                    Concept Gap
+                  </button>
+                  <button
+                    onClick={() => handleSaveToVault("Silly Slip")}
+                    className="w-full text-left px-4 py-3 hover:bg-zinc-800 rounded-lg text-sm text-rose-400 font-medium transition-colors"
+                  >
+                    Silly Slip
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {saveToast && (
+            <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-emerald-900/90 border border-emerald-800 text-emerald-100 px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-sm z-50">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              Saved to Vault
+            </div>
+          )}
         </div>
       )}
     </div>

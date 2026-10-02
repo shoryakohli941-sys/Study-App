@@ -19,12 +19,12 @@ export const WarmupVault: React.FC = () => {
   if (dueMistakes.length === 0 || currentReviewIndex >= dueMistakes.length) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-        <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center mb-6">
-          <CheckCircle2 className="w-10 h-10 text-white" />
+        <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(34,197,94,0.1)]">
+          <CheckCircle2 className="w-10 h-10 text-emerald-400" />
         </div>
-        <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">All caught up!</h2>
+        <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">All caught up for today!</h2>
         <p className="text-zinc-400 mb-8 max-w-sm">
-          You've completed today's warmup. Back to problem solving.
+          Back to problem solving 🚀
         </p>
       </div>
     );
@@ -34,13 +34,15 @@ export const WarmupVault: React.FC = () => {
   const daysElapsed = Math.floor((Date.now() - currentMistake.createdAt) / 86400000);
 
   const handleReview = async (quality: 'tough' | 'mastered') => {
-    const intervals = [1, 3, 7, 21]; // stages 0, 1, 2, 3 in days
+    // interval maps to the days added based on stage
+    // stages 0, 1, 2, 3 correspond to 1, 3, 7, 21 days
+    const intervals = [1, 3, 7, 21];
 
     let newStage = currentMistake.reviewStage;
     if (quality === 'mastered') {
       newStage = Math.min(newStage + 1, 3);
     } else {
-      newStage = 0;
+      newStage = 0; // Reset to stage 0 if still tough
     }
 
     const nextIntervalDays = intervals[newStage];
@@ -52,9 +54,6 @@ export const WarmupVault: React.FC = () => {
     });
 
     setIsFlipped(false);
-    // Do not increment currentReviewIndex here, because the useLiveQuery
-    // will automatically remove the updated item from the dueMistakes array,
-    // shifting the remaining items left.
   };
 
   return (
@@ -89,14 +88,17 @@ export const WarmupVault: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-6 bg-zinc-950">
-            <div className="flex items-center gap-3 mb-2">
+          <div className="p-6 bg-zinc-950 flex flex-col gap-2">
+            <div className="flex items-center gap-3">
               <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-white text-black">
                 {currentMistake.subject}
               </span>
               <span className="text-white text-sm font-medium tracking-tight">{currentMistake.chapter}</span>
             </div>
-            <p className="text-zinc-500 text-xs">Tap to reveal the trap and key formula</p>
+            {currentMistake.subtopic && (
+              <p className="text-zinc-400 text-xs mt-1">{currentMistake.subtopic}</p>
+            )}
+            <p className="text-zinc-500 text-xs mt-2 italic">Tap to reveal the trap and key formula</p>
           </div>
         </div>
 
@@ -106,22 +108,22 @@ export const WarmupVault: React.FC = () => {
           style={{ backfaceVisibility: 'hidden' }}
         >
           <div className="flex-1 space-y-6">
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4">
+            <div className="bg-rose-950/20 border border-rose-900/40 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <Target className="w-5 h-5 text-white shrink-0 mt-0.5" />
+                <Target className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-semibold text-white mb-1 uppercase tracking-tight text-sm">The Trap</h3>
-                  <p className="text-zinc-300 text-sm leading-relaxed">{currentMistake.theTrap}</p>
+                  <h3 className="font-semibold text-rose-400 mb-1 uppercase tracking-tight text-sm">The Trap</h3>
+                  <p className="text-rose-200 text-sm leading-relaxed">{currentMistake.theTrap}</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4">
+            <div className="bg-indigo-950/20 border border-indigo-900/40 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <Sigma className="w-5 h-5 text-white shrink-0 mt-0.5" />
+                <Sigma className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-semibold text-white mb-2 uppercase tracking-tight text-sm">Key Formula / Setup</h3>
-                  <p className="text-zinc-300 text-sm font-mono bg-black p-3 rounded-md border border-zinc-800">
+                  <h3 className="font-semibold text-indigo-400 mb-2 uppercase tracking-tight text-sm">Key Formula / Condition</h3>
+                  <p className="text-indigo-100 text-sm font-mono bg-black p-3 rounded-md border border-indigo-900/50">
                     {currentMistake.keyFormula}
                   </p>
                 </div>
@@ -132,17 +134,17 @@ export const WarmupVault: React.FC = () => {
           <div className="pt-6 border-t border-zinc-800 flex gap-4 mt-auto">
             <button
               onClick={(e) => { e.stopPropagation(); handleReview('tough'); }}
-              className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 border border-zinc-800"
+              className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2 border border-zinc-800"
             >
               <RotateCcw className="w-4 h-4" />
-              Still Tough
+              Still Tough 🔄
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); handleReview('mastered'); }}
-              className="flex-1 py-3 bg-white hover:bg-zinc-200 text-black rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+              className="flex-1 py-3 bg-white hover:bg-zinc-200 text-black rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
             >
               <Rocket className="w-4 h-4" />
-              Mastered
+              Mastered 🚀
             </button>
           </div>
         </div>
