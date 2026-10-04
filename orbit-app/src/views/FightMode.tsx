@@ -10,6 +10,15 @@ import {
   type GeminiResponse,
 } from '../lib/gemini';
 import { HintCard } from '../components/HintCard';
+import { processImage } from '../lib/image';
+
+const TIPS = [
+  "Take a deep breath. Focus on the core concept.",
+  "What is the system boundary here?",
+  "Read the question carefully. Twice.",
+  "Check your units and dimensions.",
+  "Does the edge case apply here?",
+];
 
 export const FightMode: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState<AIModelKey>(getSavedAIModel());
@@ -18,6 +27,7 @@ export const FightMode: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<GeminiResponse | null>(null);
+  const [tipIndex, setTipIndex] = useState(0);
 
   // Practice Timer / Stopwatch
   const [seconds, setSeconds] = useState(0);
@@ -38,6 +48,15 @@ export const FightMode: React.FC = () => {
     };
   }, [isTimerRunning]);
 
+  useEffect(() => {
+    if (loading) {
+      const id = setInterval(() => {
+        setTipIndex((i) => (i + 1) % TIPS.length);
+      }, 3000);
+      return () => clearInterval(id);
+    }
+  }, [loading]);
+
   const formatTime = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
     const secs = totalSeconds % 60;
@@ -51,29 +70,33 @@ export const FightMode: React.FC = () => {
     setError(null);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await processImage(file);
+        setSelectedImage(compressed);
+      } catch (err) {
+        console.error('Image compression failed', err);
+        setError('Failed to process image');
+      }
     }
   };
 
-  const handlePaste = (e: React.ClipboardEvent) => {
+  const handlePaste = async (e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (items) {
       for (let i = 0; i < items.length; i++) {
         if (items[i].type.startsWith('image/')) {
           const file = items[i].getAsFile();
           if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              setSelectedImage(reader.result as string);
-            };
-            reader.readAsDataURL(file);
+            try {
+              const compressed = await processImage(file);
+              setSelectedImage(compressed);
+            } catch (err) {
+              console.error('Image compression failed', err);
+              setError('Failed to process image');
+            }
           }
           break;
         }
@@ -246,6 +269,7 @@ export const FightMode: React.FC = () => {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                capture="environment"
                 onChange={handleImageUpload}
                 className="hidden"
               />
@@ -267,7 +291,7 @@ export const FightMode: React.FC = () => {
               {loading ? (
                 <>
                   <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Analyzing with {AI_MODELS[selectedModel].name}...</span>
+                  <span>{TIPS[tipIndex]}</span>
                 </>
               ) : (
                 <span>Solve Doubt →</span>
@@ -290,7 +314,7 @@ export const FightMode: React.FC = () => {
             </span>
           </div>
 
-          <HintCard response={analysisResult} onReset={handleReset} />
+          <HintCard response={analysisResult} imageData={selectedImage || undefined} onReset={handleReset} />
         </div>
       )}
     </div>

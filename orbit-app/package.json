@@ -10,12 +10,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/genai": "^2.24.0",
+    "@google/genai": "^2.27.0",
     "autoprefixer": "^10.6.1",
     "clsx": "^2.1.1",
     "dexie": "^4.4.6",
     "dexie-react-hooks": "^4.4.0",
-    "lucide-react": "^1.48.0",
+    "lucide-react": "^1.52.0",
     "postcss": "^8.5.28",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
