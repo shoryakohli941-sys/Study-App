@@ -7,9 +7,13 @@ export const WarmupVault: React.FC = () => {
   const currentReviewIndex = 0; // We always show the first due mistake because the array shifts automatically
   const [isFlipped, setIsFlipped] = useState(false);
 
+  const [now] = useState(() => Date.now());
+
   const dueMistakes = useLiveQuery(
-    () => db.mistakes.where('nextReviewDate').belowOrEqual(Date.now()).toArray(),
-    []
+    () => {
+      return db.mistakes.where('nextReviewDate').belowOrEqual(now).toArray();
+    },
+    [now]
   );
 
   if (dueMistakes === undefined) {
@@ -31,7 +35,7 @@ export const WarmupVault: React.FC = () => {
   }
 
   const currentMistake = dueMistakes[currentReviewIndex];
-  const daysElapsed = Math.floor((Date.now() - currentMistake.createdAt) / 86400000);
+  const daysElapsed = Math.floor((now - currentMistake.createdAt) / 86400000);
 
   const handleReview = async (quality: 'tough' | 'mastered') => {
     const intervals = [1, 3, 7, 21]; // stages 0, 1, 2, 3 in days
@@ -106,12 +110,12 @@ export const WarmupVault: React.FC = () => {
           style={{ backfaceVisibility: 'hidden' }}
         >
           <div className="flex-1 space-y-6">
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4">
+            <div className="bg-red-950/30 border border-red-900/50 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <Target className="w-5 h-5 text-white shrink-0 mt-0.5" />
+                <Target className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-semibold text-white mb-1 uppercase tracking-tight text-sm">The Trap</h3>
-                  <p className="text-zinc-300 text-sm leading-relaxed">{currentMistake.theTrap}</p>
+                  <h3 className="font-semibold text-red-400 mb-1 uppercase tracking-tight text-sm">The Trap</h3>
+                  <p className="text-red-200 text-sm leading-relaxed">{currentMistake.theTrap}</p>
                 </div>
               </div>
             </div>

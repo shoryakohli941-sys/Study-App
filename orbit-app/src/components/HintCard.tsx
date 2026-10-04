@@ -1,71 +1,206 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { Target, Download } from 'lucide-react';
 import { type GeminiResponse } from '../lib/gemini';
+import { db } from '../db';
 
 export interface HintCardProps {
   response?: GeminiResponse;
-  content?: string;
+  imageData?: string;
   onReset?: () => void;
 }
 
-export const HintCard: React.FC<HintCardProps> = ({ response, content }) => {
-  const [step, setStep] = useState(0);
+export const HintCard: React.FC<HintCardProps> = ({ response, imageData, onReset }) => {
+  const [step, setStep] = useState(1);
+  const [isSolutionRevealed, setIsSolutionRevealed] = useState(false);
+  const [isAddingToVault, setIsAddingToVault] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Fallback to basic string content if full response isn't provided
-  const displayContent = response?.solution || content || '';
-  const hints = response?.hints || [];
-  const maxHints = hints.length;
+  const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleHoldStart = () => {
+    holdTimerRef.current = setTimeout(() => {
+      setIsSolutionRevealed(true);
+    }, 2000);
+  };
+
+  const handleHoldEnd = () => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  };
+
+  const addToVault = async (errorType: 'Concept Gap' | 'Silly Slip') => {
+    if (!response) return;
+
+    try {
+      await db.mistakes.add({
+        imageData: imageData || "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==",
+        subject: response.subject || 'Physics',
+        chapter: response.chapter || 'General',
+        subtopic: response.subtopic || 'General',
+        theTrap: response.the_trap || 'Unknown trap',
+        keyFormula: response.key_formula || 'N/A',
+        errorType,
+        nextReviewDate: Date.now() + 86400000, // +1 day
+        reviewStage: 0,
+        createdAt: Date.now()
+      });
+
+      setIsAddingToVault(false);
+      setToastMessage("Added to Vault!");
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (err) {
+      console.error("Failed to add to vault", err);
+    }
+  };
+
+  if (!response) {
+    return null;
+  }
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl text-zinc-100 space-y-4">
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl text-slate-100 space-y-6">
       {/* Header Info */}
-      {response && (
-        <div className="border-b border-zinc-800 pb-4 mb-4">
-          <h3 className="text-lg font-bold text-white">{response.title || 'Analysis Result'}</h3>
-          <div className="flex gap-2 mt-2">
-            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">
-              {response.topic}
-            </span>
-            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">
-              {response.difficulty}
-            </span>
+      <div className="border-b border-slate-800 pb-4 flex flex-wrap gap-2">
+        <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-white text-black">
+          {response.subject}
+        </span>
+        <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-300">
+          {response.chapter}
+        </span>
+        <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-300">
+          {response.subtopic}
+        </span>
+      </div>
+
+      {/* The Trap */}
+      {response.the_trap && (
+        <div className="bg-red-950/30 border border-red-900/50 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <Target className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-xs font-bold text-red-400 uppercase tracking-wider mb-1">The Trap</h4>
+              <p className="text-sm text-red-200">{response.the_trap}</p>
+            </div>
           </div>
-          {response.question && (
-            <p className="mt-4 text-sm text-zinc-300 italic border-l-2 border-indigo-500/50 pl-3">
-              "{response.question}"
-            </p>
-          )}
         </div>
       )}
 
       {/* Progressive Hints */}
-      {maxHints > 0 && (
-        <div className="space-y-3">
-          <h4 className="text-xs font-semibold uppercase text-zinc-500">Conceptual Hints</h4>
-          {hints.slice(0, step + 1).map((hint, idx) => (
-            <div key={idx} className="p-3 bg-indigo-950/20 border border-indigo-900/40 rounded-xl text-sm text-indigo-100">
-              <span className="font-bold text-indigo-400 mr-2">Hint {idx + 1}:</span>
-              {hint}
-            </div>
-          ))}
-          
-          {step < maxHints - 1 && (
-            <button
-              onClick={() => setStep((s) => s + 1)}
-              className="px-4 py-2 mt-2 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold rounded-lg transition border border-zinc-700"
-            >
-              Reveal Next Hint
-            </button>
-          )}
+      <div className="space-y-3">
+        {step >= 1 && (
+          <div className="p-4 bg-indigo-950/20 border border-indigo-900/40 rounded-xl">
+            <h4 className="text-xs font-semibold uppercase text-indigo-400 mb-2">Hint 1: The Core Lens</h4>
+            <p className="text-sm text-indigo-100">{response.hint_1_lens}</p>
+          </div>
+        )}
+
+        {step === 1 && (
+          <button
+            onClick={() => setStep(2)}
+            className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold rounded-xl transition border border-slate-700"
+          >
+            Unlock Hint 2: Setup
+          </button>
+        )}
+
+        {step >= 2 && (
+          <div className="p-4 bg-indigo-950/20 border border-indigo-900/40 rounded-xl animate-in fade-in slide-in-from-top-2">
+            <h4 className="text-xs font-semibold uppercase text-indigo-400 mb-2">Hint 2: Setup</h4>
+            <p className="text-sm text-indigo-100">{response.hint_2_setup}</p>
+          </div>
+        )}
+
+        {step === 2 && (
+          <button
+            onClick={() => setStep(3)}
+            className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold rounded-xl transition border border-slate-700"
+          >
+            Unlock Hint 3: The Bottleneck
+          </button>
+        )}
+
+        {step >= 3 && (
+          <div className="p-4 bg-indigo-950/20 border border-indigo-900/40 rounded-xl animate-in fade-in slide-in-from-top-2">
+            <h4 className="text-xs font-semibold uppercase text-indigo-400 mb-2">Hint 3: The Bottleneck</h4>
+            <p className="text-sm text-indigo-100">{response.hint_3_pivot}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Full Solution */}
+      {step >= 3 && !isSolutionRevealed && (
+        <div className="pt-4 border-t border-slate-800">
+          <button
+            onMouseDown={handleHoldStart}
+            onMouseUp={handleHoldEnd}
+            onMouseLeave={handleHoldEnd}
+            onTouchStart={handleHoldStart}
+            onTouchEnd={handleHoldEnd}
+            className="w-full py-4 bg-slate-800 text-slate-300 text-sm font-semibold rounded-xl border border-slate-700 transition active:scale-[0.98] active:bg-slate-700 select-none"
+          >
+            Hold 2s to Reveal Solution
+          </button>
         </div>
       )}
 
-      {/* Full Solution (Revealed at the end or if no hints exist) */}
-      {(!response || step >= maxHints - 1) && (
-        <div className="pt-4 border-t border-zinc-800 mt-4 space-y-3 animate-in fade-in duration-500">
-          <h4 className="text-xs font-semibold uppercase text-zinc-500">Step-by-Step Solution</h4>
-          <div className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans">
-            {displayContent}
+      {isSolutionRevealed && (
+        <div className="pt-6 border-t border-slate-800 space-y-4 animate-in fade-in duration-500">
+          <div>
+            <h4 className="text-xs font-semibold uppercase text-emerald-400 mb-2">Key Formula</h4>
+            <p className="text-sm text-slate-200 font-mono bg-black p-3 rounded-lg border border-slate-800">
+              {response.key_formula}
+            </p>
           </div>
+          <div>
+            <h4 className="text-xs font-semibold uppercase text-slate-500 mb-2">Full Solution</h4>
+            <div className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed font-sans bg-black p-4 rounded-xl border border-slate-800">
+              {response.full_solution}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom Actions */}
+      <div className="pt-4 flex gap-3">
+        <button
+          onClick={onReset}
+          className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition shadow-lg shadow-emerald-900/20"
+        >
+          Cracked It! 🎯
+        </button>
+        <div className="relative flex-1">
+          <button
+            onClick={() => setIsAddingToVault(!isAddingToVault)}
+            className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold rounded-xl transition flex items-center justify-center gap-2 border border-slate-700"
+          >
+            <Download className="w-4 h-4" />
+            Add to Vault
+          </button>
+
+          {isAddingToVault && (
+            <div className="absolute bottom-full left-0 right-0 mb-2 p-2 bg-slate-800 border border-slate-700 rounded-xl shadow-xl flex flex-col gap-2 animate-in slide-in-from-bottom-2">
+              <button
+                onClick={() => addToVault('Concept Gap')}
+                className="py-2.5 px-4 text-sm font-medium text-left text-white hover:bg-slate-700 rounded-lg transition"
+              >
+                📥 Concept Gap
+              </button>
+              <button
+                onClick={() => addToVault('Silly Slip')}
+                className="py-2.5 px-4 text-sm font-medium text-left text-white hover:bg-slate-700 rounded-lg transition"
+              >
+                📥 Silly Slip
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {toastMessage && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 px-4 py-2 bg-emerald-500 text-white text-sm font-bold rounded-full shadow-lg animate-in slide-in-from-bottom-4">
+          {toastMessage}
         </div>
       )}
     </div>
