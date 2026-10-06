@@ -22,10 +22,7 @@ export const WarmupVault: React.FC = () => {
         <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center mb-6">
           <CheckCircle2 className="w-10 h-10 text-white" />
         </div>
-        <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">All caught up!</h2>
-        <p className="text-zinc-400 mb-8 max-w-sm">
-          You've completed today's warmup. Back to problem solving.
-        </p>
+        <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">All caught up for today! Back to problem solving 🚀</h2>
       </div>
     );
   }
@@ -135,14 +132,14 @@ export const WarmupVault: React.FC = () => {
               className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 border border-zinc-800"
             >
               <RotateCcw className="w-4 h-4" />
-              Still Tough
+              Still Tough 🔄
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); handleReview('mastered'); }}
               className="flex-1 py-3 bg-white hover:bg-zinc-200 text-black rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
             >
               <Rocket className="w-4 h-4" />
-              Mastered
+              Mastered 🚀
             </button>
           </div>
         </div>
