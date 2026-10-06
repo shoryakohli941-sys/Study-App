@@ -56,7 +56,26 @@ export const FightMode: React.FC = () => {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setSelectedImage(reader.result as string);
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          if (width > 800) {
+            height = Math.round((height * 800) / width);
+            width = 800;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          setSelectedImage(compressedDataUrl);
+        };
+        img.src = reader.result as string;
       };
       reader.readAsDataURL(file);
     }
@@ -239,41 +258,50 @@ export const FightMode: React.FC = () => {
             </div>
           )}
 
+          {/* Loading Skeleton */}
+          {loading && (
+            <div className="py-8 flex flex-col items-center justify-center space-y-4 animate-pulse">
+              <div className="w-12 h-12 rounded-full border-4 border-indigo-500/30 border-t-indigo-500 animate-spin" />
+              <p className="text-sm font-medium text-indigo-400">
+                Analyzing with {AI_MODELS[selectedModel].name}...
+              </p>
+              <div className="text-xs text-zinc-500 italic mt-2 text-center max-w-sm">
+                "Focus on the underlying principle, not just the final answer."
+              </div>
+            </div>
+          )}
+
           {/* Action Row */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            <div className="flex items-center gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
+          {!loading && (
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+              <div className="flex items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 border border-zinc-700 rounded-xl text-xs font-medium flex items-center gap-2 transition"
+                >
+                  <span>📷</span>
+                  <span>{selectedImage ? 'Change Image' : 'Attach Screenshot'}</span>
+                </button>
+              </div>
+
               <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 border border-zinc-700 rounded-xl text-xs font-medium flex items-center gap-2 transition"
+                onClick={() => handleSubmit()}
+                disabled={loading || (!doubtText.trim() && !selectedImage)}
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition shadow-lg shadow-indigo-600/20 flex items-center gap-2"
               >
-                <span>📷</span>
-                <span>{selectedImage ? 'Change Image' : 'Attach Screenshot'}</span>
+                <span>Solve Doubt →</span>
               </button>
             </div>
-
-            <button
-              onClick={() => handleSubmit()}
-              disabled={loading || (!doubtText.trim() && !selectedImage)}
-              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition shadow-lg shadow-indigo-600/20 flex items-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Analyzing with {AI_MODELS[selectedModel].name}...</span>
-                </>
-              ) : (
-                <span>Solve Doubt →</span>
-              )}
-            </button>
-          </div>
+          )}
         </div>
       ) : (
         /* HintCard & Result View */
@@ -290,7 +318,7 @@ export const FightMode: React.FC = () => {
             </span>
           </div>
 
-          <HintCard response={analysisResult} onReset={handleReset} />
+          <HintCard response={analysisResult} image={selectedImage} onReset={handleReset} />
         </div>
       )}
     </div>
