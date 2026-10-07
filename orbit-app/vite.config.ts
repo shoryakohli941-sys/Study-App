@@ -8,11 +8,14 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
         name: 'Orbit PWA',
         short_name: 'Orbit',
         description: 'JEE Aspirant Socratic Mentor',
         theme_color: '#0f172a',
+        background_color: '#0f172a',
+        display: 'standalone',
         icons: [
           {
             src: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI1MCIgZmlsbD0iIzNmODNmMCIvPjwvc3ZnPg==',

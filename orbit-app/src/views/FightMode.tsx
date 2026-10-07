@@ -51,14 +51,39 @@ export const FightMode: React.FC = () => {
     setError(null);
   };
 
+  const processImageFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const MAX_WIDTH = 800;
+
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          setSelectedImage(dataUrl);
+        }
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      processImageFile(file);
     }
   };
 
@@ -69,11 +94,7 @@ export const FightMode: React.FC = () => {
         if (items[i].type.startsWith('image/')) {
           const file = items[i].getAsFile();
           if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              setSelectedImage(reader.result as string);
-            };
-            reader.readAsDataURL(file);
+            processImageFile(file);
           }
           break;
         }
@@ -246,6 +267,7 @@ export const FightMode: React.FC = () => {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                capture="environment"
                 onChange={handleImageUpload}
                 className="hidden"
               />
@@ -264,16 +286,27 @@ export const FightMode: React.FC = () => {
               disabled={loading || (!doubtText.trim() && !selectedImage)}
               className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition shadow-lg shadow-indigo-600/20 flex items-center gap-2"
             >
-              {loading ? (
-                <>
-                  <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Analyzing with {AI_MODELS[selectedModel].name}...</span>
-                </>
-              ) : (
-                <span>Solve Doubt →</span>
-              )}
+              <span>Solve Doubt →</span>
             </button>
           </div>
+        </div>
+      ) : loading ? (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl space-y-6 animate-pulse">
+           <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center">
+                 <span className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Analyzing with {AI_MODELS[selectedModel].name}...</h3>
+                <p className="text-sm text-zinc-400">Remember: A free body diagram solves half the physics problem.</p>
+              </div>
+           </div>
+
+           <div className="space-y-3">
+              <div className="h-4 bg-zinc-800 rounded w-3/4"></div>
+              <div className="h-4 bg-zinc-800 rounded w-1/2"></div>
+              <div className="h-4 bg-zinc-800 rounded w-5/6"></div>
+           </div>
         </div>
       ) : (
         /* HintCard & Result View */
@@ -290,7 +323,7 @@ export const FightMode: React.FC = () => {
             </span>
           </div>
 
-          <HintCard response={analysisResult} onReset={handleReset} />
+          <HintCard response={analysisResult} onReset={handleReset} selectedImage={selectedImage} />
         </div>
       )}
     </div>

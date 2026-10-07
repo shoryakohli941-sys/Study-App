@@ -20,12 +20,9 @@ export const WarmupVault: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
         <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center mb-6">
-          <CheckCircle2 className="w-10 h-10 text-white" />
+          <CheckCircle2 className="w-10 h-10 text-emerald-500" />
         </div>
-        <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">All caught up!</h2>
-        <p className="text-zinc-400 mb-8 max-w-sm">
-          You've completed today's warmup. Back to problem solving.
-        </p>
+        <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">All caught up for today! Back to problem solving 🚀</h2>
       </div>
     );
   }
@@ -34,16 +31,20 @@ export const WarmupVault: React.FC = () => {
   const daysElapsed = Math.floor((Date.now() - currentMistake.createdAt) / 86400000);
 
   const handleReview = async (quality: 'tough' | 'mastered') => {
-    const intervals = [1, 3, 7, 21]; // stages 0, 1, 2, 3 in days
-
     let newStage = currentMistake.reviewStage;
+    let nextIntervalDays = 1;
+
     if (quality === 'mastered') {
+      if (newStage === 0) nextIntervalDays = 3;
+      else if (newStage === 1) nextIntervalDays = 7;
+      else nextIntervalDays = 21; // stage 2 or 3
+
       newStage = Math.min(newStage + 1, 3);
     } else {
       newStage = 0;
+      nextIntervalDays = 1;
     }
 
-    const nextIntervalDays = intervals[newStage];
     const nextReviewDate = Date.now() + nextIntervalDays * 86400000;
 
     await db.mistakes.update(currentMistake.id!, {
@@ -52,9 +53,6 @@ export const WarmupVault: React.FC = () => {
     });
 
     setIsFlipped(false);
-    // Do not increment currentReviewIndex here, because the useLiveQuery
-    // will automatically remove the updated item from the dueMistakes array,
-    // shifting the remaining items left.
   };
 
   return (
@@ -106,12 +104,12 @@ export const WarmupVault: React.FC = () => {
           style={{ backfaceVisibility: 'hidden' }}
         >
           <div className="flex-1 space-y-6">
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4">
+            <div className="bg-rose-950/20 border border-rose-900/40 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <Target className="w-5 h-5 text-white shrink-0 mt-0.5" />
+                <Target className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-semibold text-white mb-1 uppercase tracking-tight text-sm">The Trap</h3>
-                  <p className="text-zinc-300 text-sm leading-relaxed">{currentMistake.theTrap}</p>
+                  <h3 className="font-semibold text-rose-400 mb-1 uppercase tracking-tight text-sm">The Trap</h3>
+                  <p className="text-rose-100 text-sm leading-relaxed">{currentMistake.theTrap}</p>
                 </div>
               </div>
             </div>
