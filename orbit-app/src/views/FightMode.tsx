@@ -1,34 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
-import {
-  analyzeImage,
-  analyzeText,
-  hasValidApiKey,
-  getSavedAIModel,
-  saveAIModel,
-  AI_MODELS,
-  type AIModelKey,
-  type GeminiResponse,
-} from '../lib/gemini';
+import { analyzeImage, analyzeText, type GeminiResponse, AI_MODELS, type AIModelKey, getSavedAIModel, saveAIModel, hasValidApiKey } from '../lib/gemini';
 import { HintCard } from '../components/HintCard';
 
 export const FightMode: React.FC = () => {
-  const [selectedModel, setSelectedModel] = useState<AIModelKey>(getSavedAIModel());
-  const [doubtText, setDoubtText] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [doubtText, setDoubtText] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<GeminiResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Practice Timer / Stopwatch
+  const [selectedModel, setSelectedModel] = useState<AIModelKey>(getSavedAIModel());
+
+  // Timer logic
   const [seconds, setSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (isTimerRunning) {
       timerRef.current = setInterval(() => {
-        setSeconds((prev) => prev + 1);
+        setSeconds((s) => s + 1);
       }, 1000);
     } else if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -246,6 +238,7 @@ export const FightMode: React.FC = () => {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                capture="environment"
                 onChange={handleImageUpload}
                 className="hidden"
               />
@@ -290,7 +283,7 @@ export const FightMode: React.FC = () => {
             </span>
           </div>
 
-          <HintCard response={analysisResult} onReset={handleReset} />
+          <HintCard response={analysisResult} originalImage={selectedImage} onReset={handleReset} />
         </div>
       )}
     </div>

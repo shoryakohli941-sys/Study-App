@@ -1,15 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { Target, Sigma, RotateCcw, Rocket, CheckCircle2 } from 'lucide-react';
 
 export const WarmupVault: React.FC = () => {
-  const currentReviewIndex = 0; // We always show the first due mistake because the array shifts automatically
+  const currentReviewIndex = 0; // We always show the first due mistake
   const [isFlipped, setIsFlipped] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    // Keep 'now' relatively stable during the session so cards don't jitter
+    setNow(Date.now());
+  }, []);
 
   const dueMistakes = useLiveQuery(
-    () => db.mistakes.where('nextReviewDate').belowOrEqual(Date.now()).toArray(),
-    []
+    () => db.mistakes.where('nextReviewDate').belowOrEqual(now).toArray(),
+    [now]
   );
 
   if (dueMistakes === undefined) {
@@ -24,14 +30,14 @@ export const WarmupVault: React.FC = () => {
         </div>
         <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">All caught up!</h2>
         <p className="text-zinc-400 mb-8 max-w-sm">
-          You've completed today's warmup. Back to problem solving.
+          You've completed today's warmup. Back to problem solving 🚀
         </p>
       </div>
     );
   }
 
   const currentMistake = dueMistakes[currentReviewIndex];
-  const daysElapsed = Math.floor((Date.now() - currentMistake.createdAt) / 86400000);
+  const daysElapsed = Math.floor((now - currentMistake.createdAt) / 86400000);
 
   const handleReview = async (quality: 'tough' | 'mastered') => {
     const intervals = [1, 3, 7, 21]; // stages 0, 1, 2, 3 in days
@@ -52,9 +58,6 @@ export const WarmupVault: React.FC = () => {
     });
 
     setIsFlipped(false);
-    // Do not increment currentReviewIndex here, because the useLiveQuery
-    // will automatically remove the updated item from the dueMistakes array,
-    // shifting the remaining items left.
   };
 
   return (
@@ -102,16 +105,16 @@ export const WarmupVault: React.FC = () => {
 
         {/* Back of card */}
         <div
-          className="absolute inset-0 bg-black border border-zinc-800 rounded-xl shadow-2xl overflow-hidden flex flex-col p-6 [transform:rotateY(180deg)]"
+          className="absolute inset-0 bg-black border border-amber-900/40 rounded-xl shadow-2xl overflow-hidden flex flex-col p-6 [transform:rotateY(180deg)]"
           style={{ backfaceVisibility: 'hidden' }}
         >
           <div className="flex-1 space-y-6">
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4">
+            <div className="bg-amber-950/20 border border-amber-900/40 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <Target className="w-5 h-5 text-white shrink-0 mt-0.5" />
+                <Target className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-semibold text-white mb-1 uppercase tracking-tight text-sm">The Trap</h3>
-                  <p className="text-zinc-300 text-sm leading-relaxed">{currentMistake.theTrap}</p>
+                  <h3 className="font-semibold text-amber-400 mb-1 uppercase tracking-tight text-sm">The Trap</h3>
+                  <p className="text-amber-100 text-sm leading-relaxed">{currentMistake.theTrap}</p>
                 </div>
               </div>
             </div>
@@ -120,7 +123,7 @@ export const WarmupVault: React.FC = () => {
               <div className="flex items-start gap-3">
                 <Sigma className="w-5 h-5 text-white shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-semibold text-white mb-2 uppercase tracking-tight text-sm">Key Formula / Setup</h3>
+                  <h3 className="font-semibold text-white mb-2 uppercase tracking-tight text-sm">Key Formula / Condition</h3>
                   <p className="text-zinc-300 text-sm font-mono bg-black p-3 rounded-md border border-zinc-800">
                     {currentMistake.keyFormula}
                   </p>
@@ -135,14 +138,14 @@ export const WarmupVault: React.FC = () => {
               className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 border border-zinc-800"
             >
               <RotateCcw className="w-4 h-4" />
-              Still Tough
+              Still Tough 🔄
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); handleReview('mastered'); }}
               className="flex-1 py-3 bg-white hover:bg-zinc-200 text-black rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
             >
               <Rocket className="w-4 h-4" />
-              Mastered
+              Mastered 🚀
             </button>
           </div>
         </div>
