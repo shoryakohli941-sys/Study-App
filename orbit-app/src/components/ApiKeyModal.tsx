@@ -13,8 +13,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose }) => 
 
   useEffect(() => {
     if (isOpen) {
-      setKeyInput(getApiKey());
-      setError('');
+      const timer = setTimeout(() => { setKeyInput(getApiKey()); setError(""); }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
